@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -98,6 +99,9 @@
 
   <div class="main">
     <div class="topbar">
+      <button class="icon-btn" id="menuToggleBtn" title="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
       <h2 id="viewTitle">Today's Tasks</h2>
       <div class="topbar-actions">
         <button class="icon-btn" id="notifBtn" title="Notifications">
@@ -106,6 +110,8 @@
         </button>
       </div>
     </div>
+    <div class="sidebar-backdrop hidden" id="sidebarBackdrop"></div>
+
 
     <!-- TODAY / TASKS VIEW -->
     <div class="view" id="view-today">
