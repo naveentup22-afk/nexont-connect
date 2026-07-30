@@ -374,4 +374,10 @@ a { color: inherit; }
   .sidebar.open { transform: translateX(0); }
   .chat-layout { flex-direction: column; }
   .channel-list { width: 100%; border-right: none; border-bottom: 1px solid var(--border); display: flex; overflow-x: auto; }
+  #menuToggleBtn { display: flex; }
+  .sidebar-backdrop.open { display: block; }
+}
+#menuToggleBtn { display: none; }
+.sidebar-backdrop {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 25;
 }
