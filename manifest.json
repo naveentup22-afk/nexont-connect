@@ -2,7 +2,7 @@
   "name": "Nexont Connect",
   "short_name": "Nexont",
   "description": "Task tracking, handovers, and team chat across shifts",
-  "start_url": "/index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0F1115",
   "theme_color": "#2B3FF3",
@@ -12,7 +12,7 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ],
   "share_target": {
-    "action": "/share-target.html",
+    "action": "./share-target.html",
     "method": "GET",
     "params": {
       "title": "title",
