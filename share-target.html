@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexont Connect — Sharing…</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background:#0F1115; color:#EDEEF2; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+  p { font-size:14px; color:#8A90A0; }
+</style>
+</head>
+<body>
+<p>Sending to Nexont Connect…</p>
+<script>
+  // This page receives the OS share-sheet payload (e.g. from Outlook's "Share" button)
+  // and hands it to the main app as a new task draft.
+  const params = new URLSearchParams(window.location.search);
+  const title = params.get('title') || '';
+  const text = params.get('text') || '';
+  const url = params.get('url') || '';
+  const combinedText = [text, url].filter(Boolean).join('\n');
+
+  const target = new URLSearchParams();
+  if (title) target.set('shared_title', title);
+  if (combinedText) target.set('shared_text', combinedText);
+
+  window.location.replace('index.html?' + target.toString());
+</script>
+</body>
+</html>

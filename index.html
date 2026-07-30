@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nexont Connect</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2B3FF3">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="dark">
+
+<!-- Reusable logo mark (inspired by Nexont's diagonal N) -->
+<template id="nexont-mark-svg">
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 4H9L15 14V4H20V20H15L9 10V20H4V4Z" fill="white"/>
+  </svg>
+</template>
+
+<!-- ========== AUTH SCREEN ========== -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="brand-lockup">
+      <div class="nexont-mark" id="authMark"></div>
+      <div class="brand-name">Nexont <span>Connect</span></div>
+    </div>
+    <h1 id="authSubtitle">Sign in to your workspace</h1>
+
+    <form class="auth-form" id="loginForm">
+      <input type="email" id="loginEmail" placeholder="Email" required autocomplete="username">
+      <input type="password" id="loginPassword" placeholder="Password" required autocomplete="current-password">
+      <div class="auth-error" id="loginError"></div>
+      <button type="submit" class="btn-primary">Sign in</button>
+    </form>
+
+    <form class="auth-form hidden" id="signupForm">
+      <input type="text" id="signupName" placeholder="Full name" required>
+      <input type="email" id="signupEmail" placeholder="Email" required autocomplete="username">
+      <input type="password" id="signupPassword" placeholder="Password (min 6 characters)" required autocomplete="new-password">
+      <div class="auth-error" id="signupError"></div>
+      <button type="submit" class="btn-primary">Create account</button>
+    </form>
+
+    <div class="auth-toggle">
+      <span id="toggleText">New here?</span>
+      <button id="toggleAuthMode">Create an account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== APP SHELL ========== -->
+<div class="app-shell" id="appShell">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-lockup">
+      <div class="nexont-mark" id="sidebarMark"></div>
+      <div class="brand-name">Nexont <span>Connect</span></div>
+    </div>
+
+    <div class="workspace-switcher">
+      <select id="workspaceSelect"></select>
+    </div>
+
+    <nav class="nav-group">
+      <button class="nav-item active" data-view="today">
+        <span>Today's Tasks</span>
+      </button>
+      <button class="nav-item" data-view="tasks">
+        <span>All Tasks</span>
+      </button>
+      <button class="nav-item" data-view="chat">
+        <span>Chat</span>
+        <span class="badge hidden" id="chatBadge">0</span>
+      </button>
+      <button class="nav-item" data-view="dashboard">
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item hidden" data-view="members" id="navMembers">
+        <span>Manage Members</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="nav-item" data-view="settings">
+        <span>Settings</span>
+      </button>
+      <div class="user-chip">
+        <div class="avatar" id="userAvatar">–</div>
+        <div class="user-chip-info">
+          <div class="user-chip-name" id="userName">–</div>
+          <div class="user-chip-role" id="userRole">–</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h2 id="viewTitle">Today's Tasks</h2>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="notifBtn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="dot hidden" id="notifDot"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- TODAY / TASKS VIEW -->
+    <div class="view" id="view-today">
+      <div class="task-grid" id="todayTaskList"></div>
+    </div>
+
+    <div class="view hidden" id="view-tasks">
+      <div class="filter-row" id="statusFilterRow">
+        <button class="chip active" data-status="all">All</button>
+        <button class="chip" data-status="To Do">To Do</button>
+        <button class="chip" data-status="In Progress">In Progress</button>
+        <button class="chip" data-status="Pending Handover">Pending Handover</button>
+        <button class="chip" data-status="At Risk">At Risk</button>
+        <button class="chip" data-status="Done">Done</button>
+      </div>
+      <div class="task-grid" id="allTaskList"></div>
+    </div>
+
+    <!-- CHAT VIEW -->
+    <div class="view hidden" id="view-chat" style="padding:0;">
+      <div class="chat-layout">
+        <div class="channel-list" id="channelList">
+          <h4>Channels</h4>
+        </div>
+        <div class="chat-main">
+          <div class="chat-messages" id="chatMessages"></div>
+          <div class="chat-input-row">
+            <div class="mention-dropdown hidden" id="mentionDropdown"></div>
+            <textarea id="chatInput" placeholder="Message #general — use @ to mention someone"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD VIEW -->
+    <div class="view hidden" id="view-dashboard">
+      <div class="stat-grid" id="statGrid"></div>
+      <div class="panel">
+        <h3>Tasks per member</h3>
+        <div id="memberBreakdown"></div>
+      </div>
+    </div>
+
+    <!-- MEMBERS VIEW (admin only) -->
+    <div class="view hidden" id="view-members">
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>Add a member</h3>
+        <div class="field-row" style="margin-top:10px;">
+          <div class="field">
+            <label>Email address</label>
+            <input type="email" id="addMemberEmail" placeholder="teammate@company.com">
+          </div>
+          <button class="btn-primary" id="addMemberBtn" style="align-self:flex-end;">Add</button>
+        </div>
+        <div class="auth-error" id="addMemberError"></div>
+      </div>
+      <div class="panel">
+        <h3>Current members</h3>
+        <div id="membersListContainer"></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS VIEW -->
+    <div class="view hidden" id="view-settings">
+      <div class="settings-section">
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <h4>Theme</h4>
+            <p>Choose light or dark appearance</p>
+          </div>
+          <div class="theme-toggle">
+            <button data-theme-choice="light" id="themeLightBtn">Light</button>
+            <button data-theme-choice="dark" id="themeDarkBtn">Dark</button>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <h4>Notifications</h4>
+            <p>Get browser alerts for assignments and mentions while the app is open</p>
+          </div>
+          <input type="checkbox" id="notifToggle" checked>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <h4 id="settingsUserName">–</h4>
+            <p id="settingsUserEmail">–</p>
+          </div>
+        </div>
+        <button class="danger-btn" id="logoutBtn" style="text-align:left;">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="fab hidden" id="fabAddTask">+</button>
+</div>
+
+<!-- ========== NEW TASK MODAL ========== -->
+<div class="modal-overlay hidden" id="taskModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="taskModalTitle">New Task</h3>
+      <button id="closeTaskModal">✕</button>
+    </div>
+    <div class="modal-body" id="taskModalBody">
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="taskTitleInput" placeholder="e.g. Prepare daily inventory report">
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="taskDescInput" rows="2" placeholder="Optional details"></textarea>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Shift</label>
+          <select id="taskShiftInput">
+            <option value="A">Shift A</option>
+            <option value="B">Shift B</option>
+            <option value="C">Shift C</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Assign to</label>
+          <select id="taskAssigneeInput"></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Deadline</label>
+          <input type="datetime-local" id="taskDeadlineInput">
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="taskStatusInput">
+            <option>To Do</option>
+            <option>In Progress</option>
+            <option>Pending Handover</option>
+            <option>At Risk</option>
+            <option>Done</option>
+          </select>
+        </div>
+      </div>
+      <div class="field hidden" id="commentsSection">
+        <label>Review comments</label>
+        <div class="comment-list" id="commentList"></div>
+        <div class="field-row" style="margin-top:8px;">
+          <input type="text" id="newCommentInput" placeholder="Add a comment...">
+          <button class="btn-secondary" id="addCommentBtn">Post</button>
+        </div>
+      </div>
+      <div class="auth-error" id="taskModalError"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary hidden" id="deleteTaskBtn" style="margin-right:auto;color:var(--danger);">Delete</button>
+      <button class="btn-secondary" id="cancelTaskBtn">Cancel</button>
+      <button class="btn-primary" id="saveTaskBtn">Save Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== NOTIFICATIONS PANEL ========== -->
+<div class="modal-overlay hidden" id="notifModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3>Notifications</h3>
+      <button id="closeNotifModal">✕</button>
+    </div>
+    <div class="modal-body" id="notifList"></div>
+  </div>
+</div>
+
+<!-- Firebase SDKs (v8 compat — matches typical simple-PWA setups) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
