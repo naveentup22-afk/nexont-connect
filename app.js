@@ -1,3 +1,4 @@
+
 /* ===================================================================
    Nexont Connect — app.js
    Auth (persistent), Workspaces, Tasks + Comments, Chat + @mentions,
@@ -196,8 +197,20 @@ async function enterWorkspace() {
 
 // ---------- Navigation ----------
 document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
-  btn.addEventListener("click", () => switchView(btn.dataset.view));
+  btn.addEventListener("click", () => { switchView(btn.dataset.view); closeSidebar(); });
 });
+function openSidebar() {
+  $("sidebar").classList.add("open");
+  $("sidebarBackdrop").classList.remove("hidden");
+  $("sidebarBackdrop").classList.add("open");
+}
+function closeSidebar() {
+  $("sidebar").classList.remove("open");
+  $("sidebarBackdrop").classList.remove("open");
+  $("sidebarBackdrop").classList.add("hidden");
+}
+$("menuToggleBtn").addEventListener("click", openSidebar);
+$("sidebarBackdrop").addEventListener("click", closeSidebar);
 function switchView(view) {
   document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
