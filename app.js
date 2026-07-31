@@ -1,4 +1,3 @@
-
 /* ===================================================================
    Nexont Connect — app.js
    Auth (persistent), Workspaces, Tasks + Comments, Chat + @mentions,
