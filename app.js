@@ -92,6 +92,23 @@ $("loginForm").addEventListener("submit", async (e) => {
   }
 });
 
+$("forgotPasswordBtn").addEventListener("click", async () => {
+  const email = $("loginEmail").value.trim();
+  $("loginError").textContent = "";
+  if (!email) {
+    $("loginError").textContent = "Enter your email above first, then tap 'Forgot password?'";
+    return;
+  }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    $("loginError").style.color = "var(--brand, #2B3FF3)";
+    $("loginError").textContent = "Password reset email sent — check your inbox.";
+  } catch (err) {
+    $("loginError").style.color = "";
+    $("loginError").textContent = err.message;
+  }
+});
+
 $("signupForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("signupError").textContent = "";
