@@ -134,6 +134,7 @@ a { color: inherit; }
 .btn-secondary:hover { background: var(--surface-hover); }
 .auth-toggle { text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 16px; }
 .auth-toggle button { color: var(--brand); font-weight: 600; }
+.link-btn { background: none; border: none; color: var(--brand); font-size: 13px; text-align: center; margin-top: 4px; cursor: pointer; }
 .auth-error { color: var(--danger); font-size: 13px; text-align: center; min-height: 16px; }
 
 /* ========== App shell ========== */
