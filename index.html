@@ -75,6 +75,9 @@
         <span>Chat</span>
         <span class="badge hidden" id="chatBadge">0</span>
       </button>
+      <button class="nav-item" data-view="schedules">
+        <span>Schedules</span>
+      </button>
       <button class="nav-item" data-view="dashboard">
         <span>Dashboard</span>
       </button>
@@ -115,6 +118,7 @@
 
     <!-- TODAY / TASKS VIEW -->
     <div class="view" id="view-today">
+      <div class="pinned-banner hidden" id="pinnedBanner"></div>
       <div class="task-grid" id="todayTaskList"></div>
     </div>
 
@@ -140,9 +144,46 @@
           <div class="chat-messages" id="chatMessages"></div>
           <div class="chat-input-row">
             <div class="mention-dropdown hidden" id="mentionDropdown"></div>
-            <textarea id="chatInput" placeholder="Message #general — use @ to mention someone"></textarea>
+            <div class="chat-attach-preview hidden" id="chatAttachPreview"></div>
+            <div class="chat-input-inner">
+              <button class="icon-btn-sm" id="chatFileBtn" title="Attach photo or document" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L10.13 17.1a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
+              </button>
+              <input type="file" id="chatFileInput" class="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+              <textarea id="chatInput" placeholder="Message #general — use @ to mention someone"></textarea>
+              <button class="icon-btn-sm" id="chatMicBtn" title="Record voice note" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
+              </button>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- SCHEDULES VIEW -->
+    <div class="view hidden" id="view-schedules">
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>Pin a schedule / submittal</h3>
+        <div class="field-row" style="margin-top:10px;">
+          <div class="field">
+            <label>Project Name</label>
+            <input type="text" id="scheduleProjectInput" placeholder="e.g. Riverside Tower">
+          </div>
+          <div class="field">
+            <label>Submittal Type</label>
+            <input type="text" id="scheduleTypeInput" placeholder="e.g. Shop Drawings">
+          </div>
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="scheduleDateInput">
+          </div>
+          <button class="btn-primary" id="addScheduleBtn" style="align-self:flex-end;">Pin</button>
+        </div>
+        <div class="auth-error" id="scheduleError"></div>
+      </div>
+      <div class="panel">
+        <h3>Pinned schedules</h3>
+        <div id="schedulesListContainer"></div>
       </div>
     </div>
 
@@ -283,10 +324,28 @@
   </div>
 </div>
 
+<!-- ========== SHARE-TARGET CHOICE MODAL ========== -->
+<div class="modal-overlay hidden" id="shareChoiceModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3>Shared content received</h3>
+      <button id="closeShareChoiceModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">What would you like to do with this?</p>
+      <div class="modal-footer" style="padding:0;">
+        <button class="btn-secondary" id="shareAsTaskBtn">Add as Task</button>
+        <button class="btn-primary" id="shareToChatBtn">Send to Chat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase SDKs (v8 compat — matches typical simple-PWA setups) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="app.js"></script>
 </body>
