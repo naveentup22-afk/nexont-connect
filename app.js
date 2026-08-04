@@ -537,17 +537,6 @@ function msgCol() {
   return db.collection("workspaces").doc(currentWorkspaceId).collection("channels").doc(activeChannelId).collection("messages");
 }
 
-function renderAttachment(m) {
-  if (!m.attachmentUrl) return "";
-  if (m.attachmentType === "image") {
-    return `<a href="${m.attachmentUrl}" target="_blank"><img class="msg-attachment-img" src="${m.attachmentUrl}" alt="attachment"></a>`;
-  }
-  if (m.attachmentType === "audio") {
-    return `<div class="msg-attachment-audio"><audio controls src="${m.attachmentUrl}"></audio></div>`;
-  }
-  return `<a class="msg-attachment-file" href="${m.attachmentUrl}" target="_blank" rel="noopener">📄 ${escapeHtml(m.attachmentName || "Document")}</a>`;
-}
-
 function listenMessages() {
   const unsub = msgCol().orderBy("createdAt", "asc").limitToLast(100).onSnapshot(snap => {
     const container = $("chatMessages");
@@ -556,13 +545,12 @@ function listenMessages() {
       const m = d.data();
       const div = document.createElement("div");
       div.className = "msg";
-      const rendered = m.text ? escapeHtml(m.text).replace(/@([A-Za-z0-9 ]+?)(?=[\s.,!?]|$)/g, '<span class="mention-tag">@$1</span>') : "";
+      const rendered = escapeHtml(m.text).replace(/@([A-Za-z0-9 ]+?)(?=[\s.,!?]|$)/g, '<span class="mention-tag">@$1</span>');
       div.innerHTML = `
         <div class="avatar">${initials(m.authorName)}</div>
         <div class="msg-body">
           <div class="msg-head"><span class="msg-author">${escapeHtml(m.authorName)}</span><span class="msg-time">${fmtDate(m.createdAt)}</span></div>
-          ${rendered ? `<div class="msg-text">${rendered}</div>` : ""}
-          ${renderAttachment(m)}
+          <div class="msg-text">${rendered}</div>
         </div>`;
       container.appendChild(div);
     });
@@ -619,103 +607,24 @@ $("chatInput").addEventListener("keydown", async (e) => {
   }
 });
 
-// ---------- Attachments (photos & documents) ----------
-let pendingAttachment = null; // { file, type: 'image'|'file' }
-
-$("chatFileBtn").addEventListener("click", () => $("chatFileInput").click());
-$("chatFileInput").addEventListener("change", () => {
-  const file = $("chatFileInput").files[0];
-  if (!file) return;
-  const isImage = file.type.startsWith("image/");
-  pendingAttachment = { file, type: isImage ? "image" : "file" };
-  showAttachPreview(file.name, isImage ? URL.createObjectURL(file) : null);
-});
-
-function showAttachPreview(name, imgUrl) {
-  const box = $("chatAttachPreview");
-  box.classList.remove("hidden");
-  box.innerHTML = `${imgUrl ? `<img src="${imgUrl}">` : "📄"} <span>${escapeHtml(name)}</span><button id="clearAttachBtn" type="button">✕</button>`;
-  $("clearAttachBtn").addEventListener("click", clearAttachment);
-}
-
-function clearAttachment() {
-  pendingAttachment = null;
-  $("chatFileInput").value = "";
-  $("chatAttachPreview").classList.add("hidden");
-  $("chatAttachPreview").innerHTML = "";
-}
-
-async function uploadToWorkspaceStorage(blob, filename) {
-  const path = `workspaces/${currentWorkspaceId}/chat/${activeChannelId}/${Date.now()}_${filename}`;
-  const ref = storage.ref(path);
-  await ref.put(blob);
-  return ref.getDownloadURL();
-}
-
-// ---------- Voice notes ----------
-let mediaRecorder = null;
-let recordedChunks = [];
-let isRecording = false;
-
-$("chatMicBtn").addEventListener("click", async () => {
-  if (isRecording) {
-    mediaRecorder.stop();
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    recordedChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      isRecording = false;
-      $("chatMicBtn").classList.remove("recording");
-      stream.getTracks().forEach(t => t.stop());
-      if (!recordedChunks.length) return;
-      const blob = new Blob(recordedChunks, { type: "audio/webm" });
-      const filename = `voice-note-${Date.now()}.webm`;
-      const url = await uploadToWorkspaceStorage(blob, filename);
-      await msgCol().add({
-        text: "", attachmentUrl: url, attachmentType: "audio", attachmentName: filename,
-        authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
-      });
-    };
-    mediaRecorder.start();
-    isRecording = true;
-    $("chatMicBtn").classList.add("recording");
-  } catch (err) {
-    alert("Microphone access denied or unavailable: " + err.message);
-  }
-});
-
 async function sendMessage() {
   const text = $("chatInput").value.trim();
-  if (!text && !pendingAttachment) return;
+  if (!text) return;
   $("chatInput").value = "";
   $("mentionDropdown").classList.add("hidden");
 
-  const data = { text, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs() };
-
-  if (pendingAttachment) {
-    const url = await uploadToWorkspaceStorage(pendingAttachment.file, pendingAttachment.file.name);
-    data.attachmentUrl = url;
-    data.attachmentType = pendingAttachment.type;
-    data.attachmentName = pendingAttachment.file.name;
-    clearAttachment();
-  }
-
-  await msgCol().add(data);
+  await msgCol().add({
+    text, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
+  });
 
   // Detect @mentions and notify
-  if (text) {
-    Object.entries(membersCache).forEach(([uid, m]) => {
-      if (uid === currentUser.uid) return;
-      const re = new RegExp(`@${m.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[\\s.,!?]|$)`, "i");
-      if (re.test(text)) {
-        pushNotification(uid, "mention", `${currentUserDoc.name} mentioned you: "${text.slice(0, 80)}"`, null);
-      }
-    });
-  }
+  Object.entries(membersCache).forEach(([uid, m]) => {
+    if (uid === currentUser.uid) return;
+    const re = new RegExp(`@${m.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[\\s.,!?]|$)`, "i");
+    if (re.test(text)) {
+      pushNotification(uid, "mention", `${currentUserDoc.name} mentioned you: "${text.slice(0, 80)}"`, null);
+    }
+  });
 }
 
 // ---------- Dashboard ----------
