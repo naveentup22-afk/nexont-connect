@@ -306,7 +306,8 @@ a { color: inherit; }
 .panel h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
 
 /* ========== Chat ========== */
-.chat-layout { display: flex; height: 100%; gap: 0; margin: -24px -28px; }
+.chat-layout { display: flex; flex: 1; min-height: 0; gap: 0; }
+#view-chat { display: flex; flex-direction: column; }
 .channel-list { width: 210px; border-right: 1px solid var(--border); padding: 16px 10px; flex-shrink: 0; }
 .channel-list h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 6px 10px; }
 .channel-item { padding: 8px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--text-muted); }
