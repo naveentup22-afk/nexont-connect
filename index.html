@@ -118,6 +118,7 @@
 
     <!-- TODAY / TASKS VIEW -->
     <div class="view" id="view-today">
+      <div class="pinned-banner hidden" id="leaveBanner"></div>
       <div class="pinned-banner hidden" id="pinnedBanner"></div>
       <div class="task-grid" id="todayTaskList"></div>
     </div>
@@ -136,6 +137,7 @@
 
     <!-- CHAT VIEW -->
     <div class="view hidden" id="view-chat" style="padding:0;">
+      <div class="pinned-banner hidden" id="leaveBannerChat" style="margin:16px 24px 0;"></div>
       <div class="pinned-banner hidden" id="pinnedBannerChat" style="margin:16px 24px 0;"></div>
       <div class="chat-layout">
         <div class="channel-list" id="channelList">
@@ -232,6 +234,24 @@
             <p id="settingsUserEmail">–</p>
           </div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <h4>On leave today</h4>
+            <p>Lets your team see you're unavailable today</p>
+          </div>
+          <input type="checkbox" id="onLeaveToggle">
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <h4>Workspace name</h4>
+            <p>Visible to everyone in this workspace</p>
+          </div>
+          <div class="field-row" style="align-items:center;">
+            <input type="text" id="workspaceNameInput" style="width:180px;">
+            <button class="btn-secondary" id="saveWorkspaceNameBtn">Save</button>
+          </div>
+        </div>
+        <div class="auth-error" id="workspaceNameError"></div>
         <button class="danger-btn" id="exitWorkspaceBtn" style="text-align:left;">Exit this workspace</button>
         <button class="danger-btn" id="logoutBtn" style="text-align:left;">Log out</button>
       </div>
