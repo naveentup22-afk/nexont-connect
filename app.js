@@ -239,6 +239,8 @@ async function enterWorkspace() {
   listenNotifications();
   listenSchedules();
   listenLeave();
+  $("teamAllowancePanel").classList.toggle("hidden", currentWorkspaceRole !== "admin");
+  listenAllowances();
 }
 
 // ---------- Navigation ----------
@@ -261,7 +263,7 @@ function switchView(view) {
   document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   $(`view-${view}`).classList.remove("hidden");
-  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", schedules: "Schedules", dashboard: "Dashboard", members: "Manage Members", settings: "Settings" };
+  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", schedules: "Schedules", dashboard: "Dashboard", allowance: "Allowance", members: "Manage Members", settings: "Settings" };
   $("viewTitle").textContent = titles[view];
   $("fabAddTask").classList.toggle("hidden", !["today", "tasks"].includes(view));
   if (view === "dashboard") renderDashboard();
@@ -582,6 +584,165 @@ $("addScheduleBtn").addEventListener("click", async () => {
   $("scheduleProjectInput").value = "";
   $("scheduleTypeInput").value = "";
   $("scheduleDateInput").value = "";
+});
+
+// ---------- Allowance ----------
+let allowanceType = "cabfood";
+let allAllowances = [];
+
+function allowanceCol() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("allowances");
+}
+
+document.querySelectorAll("#allowanceTypeRow .chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#allowanceTypeRow .chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    allowanceType = chip.dataset.atype;
+    $("cabfoodFields").classList.toggle("hidden", allowanceType !== "cabfood");
+    $("weekendFields").classList.toggle("hidden", allowanceType !== "weekend");
+    $("allowanceError").textContent = "";
+  });
+});
+
+function listenAllowances() {
+  // Admin (Team Lead) needs every member's entries for the Team Report.
+  // Engineers only ever query their own — matches the security rules,
+  // which don't allow them to read other members' allowance docs.
+  const query = currentWorkspaceRole === "admin"
+    ? allowanceCol().orderBy("date", "desc")
+    : allowanceCol().where("uid", "==", currentUser.uid).orderBy("date", "desc");
+
+  const unsub = query.onSnapshot(snap => {
+    allAllowances = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMyAllowances();
+    if (currentWorkspaceRole === "admin") renderTeamAllowances();
+  });
+  unsubscribers.push(unsub);
+}
+
+function fmtAllowanceDate(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function renderAllowanceEntry(a, canDelete) {
+  const div = document.createElement("div");
+  div.className = "allowance-entry";
+  const isCabFood = a.type === "cabfood";
+  const detail = isCabFood
+    ? `Login ${escapeHtml(a.loginTime || "—")} · Logout ${escapeHtml(a.logoutTime || "—")}`
+    : `${escapeHtml(a.project || "—")} · ${escapeHtml(a.dayType || "—")}${a.description ? " · " + escapeHtml(a.description) : ""}`;
+  div.innerHTML = `
+    <div>
+      <div style="font-weight:600;">${isCabFood ? "🚕 Cab/Food" : "🗓️ Weekend Working"} — ${fmtAllowanceDate(a.date)}</div>
+      <div class="ae-meta">${detail}</div>
+    </div>`;
+  if (canDelete) {
+    const btn = document.createElement("button");
+    btn.className = "danger-btn";
+    btn.textContent = "Delete";
+    btn.addEventListener("click", () => allowanceCol().doc(a.id).delete());
+    div.appendChild(btn);
+  }
+  return div;
+}
+
+function renderMyAllowances() {
+  const container = $("myAllowanceList");
+  if (!container) return;
+  const mine = allAllowances.filter(a => a.uid === currentUser.uid);
+  container.innerHTML = "";
+  if (!mine.length) { container.innerHTML = emptyState("No entries yet."); return; }
+  mine.forEach(a => container.appendChild(renderAllowanceEntry(a, true)));
+}
+
+function renderGroupedByMember(container, entries) {
+  container.innerHTML = "";
+  if (!entries.length) { container.innerHTML = emptyState("No entries yet."); return; }
+  const byUid = {};
+  entries.forEach(e => { (byUid[e.uid] = byUid[e.uid] || []).push(e); });
+  Object.entries(byUid).forEach(([uid, list]) => {
+    const group = document.createElement("div");
+    group.className = "allowance-member-group";
+    group.innerHTML = `<div class="allowance-member-group-title"><div class="avatar" style="width:24px;height:24px;font-size:11px;">${initials(membersCache[uid]?.name)}</div>${escapeHtml(membersCache[uid]?.name || "Unknown")}</div>`;
+    list.forEach(a => group.appendChild(renderAllowanceEntry(a, false)));
+    container.appendChild(group);
+  });
+}
+
+function renderTeamAllowances() {
+  const cabPanel = $("teamCabFoodList");
+  const wkPanel = $("teamWeekendList");
+  if (!cabPanel || !wkPanel) return;
+  renderGroupedByMember(cabPanel, allAllowances.filter(a => a.type === "cabfood"));
+  renderGroupedByMember(wkPanel, allAllowances.filter(a => a.type === "weekend"));
+}
+
+$("addAllowanceBtn").addEventListener("click", async () => {
+  $("allowanceError").textContent = "";
+  try {
+    if (allowanceType === "cabfood") {
+      const date = $("cfDateInput").value;
+      const loginTime = $("cfLoginInput").value;
+      const logoutTime = $("cfLogoutInput").value;
+      if (!date || !loginTime || !logoutTime) {
+        $("allowanceError").textContent = "Date, login time, and logout time are all required.";
+        return;
+      }
+      await allowanceCol().add({
+        type: "cabfood", date, loginTime, logoutTime,
+        uid: currentUser.uid, userName: currentUserDoc.name, createdAt: nowTs()
+      });
+      $("cfDateInput").value = ""; $("cfLoginInput").value = ""; $("cfLogoutInput").value = "";
+    } else {
+      const date = $("wkDateInput").value;
+      const project = $("wkProjectInput").value.trim();
+      const description = $("wkDescInput").value.trim();
+      const dayType = $("wkDayTypeInput").value;
+      if (!date || !project) {
+        $("allowanceError").textContent = "Date and project are required.";
+        return;
+      }
+      await allowanceCol().add({
+        type: "weekend", date, project, description, dayType,
+        uid: currentUser.uid, userName: currentUserDoc.name, createdAt: nowTs()
+      });
+      $("wkDateInput").value = ""; $("wkProjectInput").value = ""; $("wkDescInput").value = ""; $("wkDayTypeInput").value = "Full day";
+    }
+  } catch (err) {
+    $("allowanceError").textContent = err.message;
+  }
+});
+
+function downloadCsv(filename, rows) {
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+$("exportCabFoodBtn").addEventListener("click", () => {
+  const rows = [["Member", "Date", "Login Time", "Logout Time"]];
+  allAllowances.filter(a => a.type === "cabfood").forEach(a => {
+    rows.push([membersCache[a.uid]?.name || a.userName || "Unknown", a.date, a.loginTime, a.logoutTime]);
+  });
+  downloadCsv(`cab-food-allowance-${todayStr()}.csv`, rows);
+});
+
+$("exportWeekendBtn").addEventListener("click", () => {
+  const rows = [["Member", "Date", "Project", "Work Description", "Day Type"]];
+  allAllowances.filter(a => a.type === "weekend").forEach(a => {
+    rows.push([membersCache[a.uid]?.name || a.userName || "Unknown", a.date, a.project, a.description, a.dayType]);
+  });
+  downloadCsv(`weekend-working-${todayStr()}.csv`, rows);
 });
 
 // ---------- Chat ----------
