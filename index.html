@@ -144,17 +144,7 @@
           <div class="chat-messages" id="chatMessages"></div>
           <div class="chat-input-row">
             <div class="mention-dropdown hidden" id="mentionDropdown"></div>
-            <div class="chat-attach-preview hidden" id="chatAttachPreview"></div>
-            <div class="chat-input-inner">
-              <button class="icon-btn-sm" id="chatFileBtn" title="Attach photo or document" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L10.13 17.1a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
-              </button>
-              <input type="file" id="chatFileInput" class="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
-              <textarea id="chatInput" placeholder="Message #general — use @ to mention someone"></textarea>
-              <button class="icon-btn-sm" id="chatMicBtn" title="Record voice note" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
-              </button>
-            </div>
+            <textarea id="chatInput" placeholder="Message #general — use @ to mention someone"></textarea>
           </div>
         </div>
       </div>
@@ -345,7 +335,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="app.js"></script>
 </body>
