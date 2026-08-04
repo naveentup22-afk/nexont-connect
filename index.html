@@ -81,6 +81,9 @@
       <button class="nav-item" data-view="dashboard">
         <span>Dashboard</span>
       </button>
+      <button class="nav-item" data-view="allowance">
+        <span>Allowance</span>
+      </button>
       <button class="nav-item hidden" data-view="members" id="navMembers">
         <span>Manage Members</span>
       </button>
@@ -186,6 +189,86 @@
       <div class="panel">
         <h3>Tasks per member</h3>
         <div id="memberBreakdown"></div>
+      </div>
+    </div>
+
+    <!-- ALLOWANCE VIEW -->
+    <div class="view hidden" id="view-allowance">
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>Add Allowance Entry</h3>
+        <div class="filter-row" id="allowanceTypeRow" style="margin-top:10px;margin-bottom:14px;">
+          <button class="chip active" data-atype="cabfood">Cab / Food Allowance</button>
+          <button class="chip" data-atype="weekend">Weekend Working</button>
+        </div>
+
+        <div id="cabfoodFields">
+          <div class="field-row">
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="cfDateInput">
+            </div>
+            <div class="field">
+              <label>Login Time</label>
+              <input type="time" id="cfLoginInput">
+            </div>
+            <div class="field">
+              <label>Logout Time</label>
+              <input type="time" id="cfLogoutInput">
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden" id="weekendFields">
+          <div class="field-row">
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="wkDateInput">
+            </div>
+            <div class="field">
+              <label>Day Type</label>
+              <select id="wkDayTypeInput">
+                <option>Full day</option>
+                <option>Half day</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row" style="margin-top:10px;">
+            <div class="field">
+              <label>Project</label>
+              <input type="text" id="wkProjectInput" placeholder="e.g. Riverside Tower">
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label>Work Description</label>
+            <textarea id="wkDescInput" rows="2" placeholder="What did you work on?"></textarea>
+          </div>
+        </div>
+
+        <div class="auth-error" id="allowanceError"></div>
+        <button class="btn-primary" id="addAllowanceBtn" style="margin-top:12px;">Add Entry</button>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>My Entries</h3>
+        <div id="myAllowanceList"></div>
+      </div>
+
+      <div class="panel hidden" id="teamAllowancePanel">
+        <h3>Team Report</h3>
+        <div class="allowance-report-block">
+          <div class="allowance-report-head">
+            <h4>Cab / Food Allowance</h4>
+            <button class="btn-secondary" id="exportCabFoodBtn">Export CSV</button>
+          </div>
+          <div id="teamCabFoodList"></div>
+        </div>
+        <div class="allowance-report-block" style="margin-top:22px;">
+          <div class="allowance-report-head">
+            <h4>Weekend Working</h4>
+            <button class="btn-secondary" id="exportWeekendBtn">Export CSV</button>
+          </div>
+          <div id="teamWeekendList"></div>
+        </div>
       </div>
     </div>
 
