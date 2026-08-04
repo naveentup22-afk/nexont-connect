@@ -123,6 +123,19 @@ $("signupForm").addEventListener("submit", async (e) => {
   }
 });
 
+$("saveWorkspaceNameBtn").addEventListener("click", async () => {
+  $("workspaceNameError").textContent = "";
+  const name = $("workspaceNameInput").value.trim();
+  if (!name) { $("workspaceNameError").textContent = "Workspace name can't be empty."; return; }
+  try {
+    await db.collection("workspaces").doc(currentWorkspaceId).update({ name });
+    const opt = $("workspaceSelect").querySelector(`option[value="${currentWorkspaceId}"]`);
+    if (opt) opt.textContent = name;
+  } catch (err) {
+    $("workspaceNameError").textContent = err.message;
+  }
+});
+
 $("logoutBtn").addEventListener("click", () => auth.signOut());
 
 $("exitWorkspaceBtn").addEventListener("click", async () => {
@@ -217,6 +230,7 @@ async function enterWorkspace() {
   currentWorkspaceRole = (membersCache[currentUser.uid] || {}).role || "member";
   $("navMembers").classList.toggle("hidden", currentWorkspaceRole !== "admin");
   $("userRole").textContent = currentWorkspaceRole === "admin" ? "Admin" : "Member";
+  $("workspaceNameInput").value = ws.name || "";
 
   populateAssigneeDropdown();
   renderMembersView();
@@ -224,6 +238,7 @@ async function enterWorkspace() {
   listenChannels();
   listenNotifications();
   listenSchedules();
+  listenLeave();
 }
 
 // ---------- Navigation ----------
@@ -440,6 +455,50 @@ $("addCommentBtn").addEventListener("click", async () => {
     await pushNotification(task.assignedTo, "comment", `${currentUserDoc.name} commented on "${task.title}"`, editingTaskId);
   }
   $("newCommentInput").value = "";
+});
+
+// ---------- On Leave Today ----------
+function leaveCol() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("leaveToday");
+}
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+let onLeaveList = [];
+function listenLeave() {
+  const unsub = leaveCol().where("date", "==", todayStr()).onSnapshot(snap => {
+    onLeaveList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderLeaveBanner();
+    $("onLeaveToggle").checked = onLeaveList.some(l => l.id === currentUser.uid);
+  });
+  unsubscribers.push(unsub);
+}
+
+function renderLeaveBanner() {
+  [$("leaveBanner"), $("leaveBannerChat")].forEach(banner => {
+    if (!banner) return;
+    if (!onLeaveList.length) { banner.classList.add("hidden"); banner.innerHTML = ""; return; }
+    banner.classList.remove("hidden");
+    banner.innerHTML = "";
+    onLeaveList.forEach(l => {
+      const row = document.createElement("div");
+      row.className = "pinned-item";
+      row.innerHTML = `<div class="pin-title">🌴 ${escapeHtml(l.name)} is on leave today</div>`;
+      banner.appendChild(row);
+    });
+  });
+}
+
+$("onLeaveToggle").addEventListener("change", async (e) => {
+  if (e.target.checked) {
+    await leaveCol().doc(currentUser.uid).set({
+      name: currentUserDoc.name, date: todayStr(), createdAt: nowTs()
+    });
+  } else {
+    await leaveCol().doc(currentUser.uid).delete();
+  }
 });
 
 // ---------- Schedules (pinned) ----------
