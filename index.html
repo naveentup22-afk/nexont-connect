@@ -40,6 +40,13 @@
       <input type="text" id="signupName" placeholder="Full name" required>
       <input type="email" id="signupEmail" placeholder="Email" required autocomplete="username">
       <input type="password" id="signupPassword" placeholder="Password (min 6 characters)" required autocomplete="new-password">
+      <div class="field">
+        <label>I am a</label>
+        <div class="theme-toggle" id="signupTypeToggle" style="width:100%;">
+          <button type="button" data-account-type="admin" class="active" style="flex:1;">Team Lead</button>
+          <button type="button" data-account-type="member" style="flex:1;">Engineer</button>
+        </div>
+      </div>
       <div class="auth-error" id="signupError"></div>
       <button type="submit" class="btn-primary">Create account</button>
     </form>
@@ -47,6 +54,33 @@
     <div class="auth-toggle">
       <span id="toggleText">New here?</span>
       <button id="toggleAuthMode">Create an account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== NO WORKSPACE YET SCREEN ========== -->
+<div class="auth-screen" id="noWorkspaceScreen" style="display:none;">
+  <div class="auth-card">
+    <div class="brand-lockup">
+      <div class="nexont-mark" id="noWsMark"></div>
+      <div class="brand-name">Nexont <span>Connect</span></div>
+    </div>
+
+    <div id="noWsTeamLead">
+      <h1>Name your first workspace</h1>
+      <form class="auth-form" id="createWorkspaceForm">
+        <input type="text" id="newWorkspaceNameInput" placeholder="e.g. Riverside Ops" required>
+        <div class="auth-error" id="createWorkspaceError"></div>
+        <button type="submit" class="btn-primary">Create workspace</button>
+      </form>
+    </div>
+
+    <div class="hidden" id="noWsEngineer" style="text-align:center;">
+      <h1>Waiting to be added</h1>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;">
+        Ask your Team Lead to add you using this email:<br>
+        <strong id="noWsEngineerEmail" style="color:var(--text);"></strong>
+      </p>
     </div>
   </div>
 </div>
@@ -315,6 +349,16 @@
           <div class="settings-row-info">
             <h4 id="settingsUserName">–</h4>
             <p id="settingsUserEmail">–</p>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <h4>Account type</h4>
+            <p>Team Lead can create workspaces · Engineer waits to be added</p>
+          </div>
+          <div class="theme-toggle" id="accountTypeToggle">
+            <button data-account-choice="admin" id="acctTeamLeadBtn">Team Lead</button>
+            <button data-account-choice="member" id="acctEngineerBtn">Engineer</button>
           </div>
         </div>
         <div class="settings-row">
