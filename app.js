@@ -125,6 +125,20 @@ $("signupForm").addEventListener("submit", async (e) => {
 
 $("logoutBtn").addEventListener("click", () => auth.signOut());
 
+$("exitWorkspaceBtn").addEventListener("click", async () => {
+  if (!currentWorkspaceId) return;
+  const wsName = $("workspaceSelect").selectedOptions[0]?.textContent || "this workspace";
+  if (!confirm(`Leave "${wsName}"? You'll lose access to its tasks, chat, and schedules.`)) return;
+  const wsRef = db.collection("workspaces").doc(currentWorkspaceId);
+  await wsRef.update({
+    memberUids: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
+    [`members.${currentUser.uid}`]: firebase.firestore.FieldValue.delete()
+  });
+  currentWorkspaceId = null;
+  await loadWorkspaces();
+  switchView("today");
+});
+
 auth.onAuthStateChanged(async (user) => {
   clearListeners();
   if (!user) {
@@ -475,20 +489,21 @@ function renderSchedulesList() {
 }
 
 function renderPinnedBanner() {
-  const banner = $("pinnedBanner");
-  if (!banner) return;
-  if (!allSchedules.length) { banner.classList.add("hidden"); banner.innerHTML = ""; return; }
-  banner.classList.remove("hidden");
-  banner.innerHTML = "";
-  allSchedules.slice(0, 3).forEach(s => {
-    const row = document.createElement("div");
-    row.className = "pinned-item";
-    row.innerHTML = `
-      <div style="flex:1;">
-        <div class="pin-title">📌 ${escapeHtml(s.projectName)} — ${escapeHtml(s.submittalType)}</div>
-        <div class="pin-meta">${fmtScheduleDate(s.date)}</div>
-      </div>`;
-    banner.appendChild(row);
+  [$("pinnedBanner"), $("pinnedBannerChat")].forEach(banner => {
+    if (!banner) return;
+    if (!allSchedules.length) { banner.classList.add("hidden"); banner.innerHTML = ""; return; }
+    banner.classList.remove("hidden");
+    banner.innerHTML = "";
+    allSchedules.slice(0, 3).forEach(s => {
+      const row = document.createElement("div");
+      row.className = "pinned-item";
+      row.innerHTML = `
+        <div style="flex:1;">
+          <div class="pin-title">📌 ${escapeHtml(s.projectName)} — ${escapeHtml(s.submittalType)}</div>
+          <div class="pin-meta">${fmtScheduleDate(s.date)}</div>
+        </div>`;
+      banner.appendChild(row);
+    });
   });
 }
 
@@ -667,14 +682,29 @@ function renderMembersView() {
   Object.entries(membersCache).forEach(([uid, m]) => {
     const row = document.createElement("div");
     row.className = "member-row";
+    const canRemove = currentWorkspaceRole === "admin" && uid !== currentUser.uid;
     row.innerHTML = `
       <div class="avatar">${initials(m.name)}</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:600;">${escapeHtml(m.name)}</div>
         <div style="font-size:12px;color:var(--text-muted);">${escapeHtml(m.email)} · ${m.role}</div>
-      </div>`;
+      </div>
+      ${canRemove ? `<button class="danger-btn" data-uid="${uid}">Remove</button>` : ""}`;
+    if (canRemove) {
+      row.querySelector("button").addEventListener("click", () => removeMember(uid, m.name));
+    }
     container.appendChild(row);
   });
+}
+
+async function removeMember(uid, name) {
+  if (!confirm(`Remove ${name} from this workspace?`)) return;
+  const wsRef = db.collection("workspaces").doc(currentWorkspaceId);
+  await wsRef.update({
+    memberUids: firebase.firestore.FieldValue.arrayRemove(uid),
+    [`members.${uid}`]: firebase.firestore.FieldValue.delete()
+  });
+  await enterWorkspace();
 }
 
 $("addMemberBtn").addEventListener("click", async () => {
