@@ -70,6 +70,22 @@ function applyTheme(theme) {
 $("themeLightBtn").addEventListener("click", () => applyTheme("light"));
 $("themeDarkBtn").addEventListener("click", () => applyTheme("dark"));
 
+// ---------- Account type (Team Lead / Engineer) ----------
+function applyAccountTypeUI(accountType) {
+  $("acctTeamLeadBtn").classList.toggle("active", accountType === "admin");
+  $("acctEngineerBtn").classList.toggle("active", accountType === "member");
+}
+
+document.querySelectorAll("#accountTypeToggle button").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const newType = btn.dataset.accountChoice;
+    if (newType === currentUserDoc.accountType) return;
+    await db.collection("users").doc(currentUser.uid).update({ accountType: newType });
+    currentUserDoc.accountType = newType;
+    applyAccountTypeUI(newType);
+  });
+});
+
 // ---------- Auth persistence (stay logged in) ----------
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
@@ -109,6 +125,15 @@ $("forgotPasswordBtn").addEventListener("click", async () => {
   }
 });
 
+let signupAccountType = "admin";
+document.querySelectorAll("#signupTypeToggle button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#signupTypeToggle button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    signupAccountType = btn.dataset.accountType;
+  });
+});
+
 $("signupForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("signupError").textContent = "";
@@ -116,7 +141,7 @@ $("signupForm").addEventListener("submit", async (e) => {
     const name = $("signupName").value.trim();
     const cred = await auth.createUserWithEmailAndPassword($("signupEmail").value.trim(), $("signupPassword").value);
     await db.collection("users").doc(cred.user.uid).set({
-      name, email: cred.user.email, createdAt: nowTs()
+      name, email: cred.user.email, accountType: signupAccountType, createdAt: nowTs()
     });
   } catch (err) {
     $("signupError").textContent = err.message;
@@ -164,15 +189,21 @@ auth.onAuthStateChanged(async (user) => {
   const userSnap = await db.collection("users").doc(user.uid).get();
   currentUserDoc = userSnap.exists ? userSnap.data() : { name: user.email, email: user.email };
   if (!userSnap.exists) {
-    await db.collection("users").doc(user.uid).set({ name: currentUserDoc.name, email: user.email, createdAt: nowTs() });
+    await db.collection("users").doc(user.uid).set({ name: currentUserDoc.name, email: user.email, accountType: "admin", createdAt: nowTs() });
+    currentUserDoc.accountType = "admin";
   }
+  // Existing users created before this feature default to Team Lead so nobody
+  // who could already create workspaces loses that ability.
+  if (!currentUserDoc.accountType) currentUserDoc.accountType = "admin";
 
   $("authScreen").style.display = "none";
+  $("noWorkspaceScreen").style.display = "none";
   $("appShell").classList.add("active");
   $("userName").textContent = currentUserDoc.name;
   $("userAvatar").textContent = initials(currentUserDoc.name);
   $("settingsUserName").textContent = currentUserDoc.name;
   $("settingsUserEmail").textContent = user.email;
+  applyAccountTypeUI(currentUserDoc.accountType);
 
   await loadWorkspaces();
   handleShareTargetIntake();
@@ -188,31 +219,29 @@ async function loadWorkspaces() {
   select.innerHTML = "";
 
   if (snap.empty) {
-    // First-time user: offer to create a workspace inline
-    const opt = document.createElement("option");
-    opt.textContent = "No workspace yet — create one";
-    select.appendChild(opt);
-    const name = prompt("Name your first workspace (e.g. 'Taxi Operations'):", "My Team");
-    if (name) {
-      const ref = await db.collection("workspaces").add({
-        name, createdBy: currentUser.uid, createdAt: nowTs(),
-        memberUids: [currentUser.uid],
-        members: { [currentUser.uid]: { role: "admin", name: currentUserDoc.name, email: currentUser.email } }
-      });
-      await db.collection("workspaces").doc(ref.id).collection("channels").doc("general").set({
-        name: "general", createdAt: nowTs()
-      });
-      currentWorkspaceId = ref.id;
+    $("appShell").classList.remove("active");
+    $("noWorkspaceScreen").style.display = "flex";
+    if (currentUserDoc.accountType === "member") {
+      $("noWsTeamLead").classList.add("hidden");
+      $("noWsEngineer").classList.remove("hidden");
+      $("noWsEngineerEmail").textContent = currentUser.email;
+    } else {
+      $("noWsTeamLead").classList.remove("hidden");
+      $("noWsEngineer").classList.add("hidden");
     }
-  } else {
-    snap.forEach(doc => {
-      const opt = document.createElement("option");
-      opt.value = doc.id;
-      opt.textContent = doc.data().name;
-      select.appendChild(opt);
-    });
-    currentWorkspaceId = select.options[0].value;
+    currentWorkspaceId = null;
+    return;
   }
+
+  $("noWorkspaceScreen").style.display = "none";
+  $("appShell").classList.add("active");
+  snap.forEach(doc => {
+    const opt = document.createElement("option");
+    opt.value = doc.id;
+    opt.textContent = doc.data().name;
+    select.appendChild(opt);
+  });
+  currentWorkspaceId = select.options[0].value;
 
   select.addEventListener("change", () => {
     currentWorkspaceId = select.value;
@@ -221,6 +250,26 @@ async function loadWorkspaces() {
 
   if (currentWorkspaceId) enterWorkspace();
 }
+
+$("createWorkspaceForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("createWorkspaceError").textContent = "";
+  const name = $("newWorkspaceNameInput").value.trim();
+  if (!name) return;
+  try {
+    const ref = await db.collection("workspaces").add({
+      name, createdBy: currentUser.uid, createdAt: nowTs(),
+      memberUids: [currentUser.uid],
+      members: { [currentUser.uid]: { role: "admin", name: currentUserDoc.name, email: currentUser.email } }
+    });
+    await db.collection("workspaces").doc(ref.id).collection("channels").doc("general").set({
+      name: "general", createdAt: nowTs()
+    });
+    await loadWorkspaces();
+  } catch (err) {
+    $("createWorkspaceError").textContent = err.message;
+  }
+});
 
 async function enterWorkspace() {
   clearListeners();
