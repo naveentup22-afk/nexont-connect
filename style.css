@@ -321,6 +321,12 @@ a { color: inherit; }
 .msg-author { font-size: 13px; font-weight: 700; }
 .msg-time { font-size: 11px; color: var(--text-muted); }
 .msg-text { font-size: 14px; line-height: 1.5; }
+.msg-edited { color: var(--text-muted); font-style: italic; }
+.msg-edit-btn { font-size: 11px; color: var(--text-muted); margin-left: auto; opacity: 0.7; }
+.msg-edit-btn:hover { opacity: 1; color: var(--brand); }
+.msg-edit-input { width: 100%; max-width: 400px; min-height: 44px; resize: vertical; font-size: 14px; margin-top: 4px; }
+.msg-edit-actions { display: flex; gap: 8px; margin-top: 6px; }
+.msg-edit-actions button { font-size: 12px; padding: 5px 12px; }
 .mention-tag { background: var(--brand-soft); color: var(--brand); padding: 1px 4px; border-radius: 4px; font-weight: 600; }
 .chat-input-row { padding: 16px 24px; border-top: 1px solid var(--border); position: relative; }
 .chat-input-row textarea { width: 100%; resize: none; min-height: 44px; max-height: 120px; }
