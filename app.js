@@ -209,6 +209,7 @@ async function enterWorkspace() {
   listenTasks();
   listenChannels();
   listenNotifications();
+  listenSchedules();
 }
 
 // ---------- Navigation ----------
@@ -231,7 +232,7 @@ function switchView(view) {
   document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   $(`view-${view}`).classList.remove("hidden");
-  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", dashboard: "Dashboard", members: "Manage Members", settings: "Settings" };
+  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", schedules: "Schedules", dashboard: "Dashboard", members: "Manage Members", settings: "Settings" };
   $("viewTitle").textContent = titles[view];
   $("fabAddTask").classList.toggle("hidden", !["today", "tasks"].includes(view));
   if (view === "dashboard") renderDashboard();
@@ -427,6 +428,88 @@ $("addCommentBtn").addEventListener("click", async () => {
   $("newCommentInput").value = "";
 });
 
+// ---------- Schedules (pinned) ----------
+function schedulesCol() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("schedules");
+}
+
+let allSchedules = [];
+function listenSchedules() {
+  const unsub = schedulesCol().orderBy("date", "asc").onSnapshot(snap => {
+    allSchedules = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderSchedulesList();
+    renderPinnedBanner();
+  });
+  unsubscribers.push(unsub);
+}
+
+function fmtScheduleDate(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function renderSchedulesList() {
+  const container = $("schedulesListContainer");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!allSchedules.length) {
+    container.innerHTML = emptyState("No pinned schedules yet.");
+    return;
+  }
+  allSchedules.forEach(s => {
+    const canRemove = s.pinnedBy === currentUser.uid || currentWorkspaceRole === "admin";
+    const row = document.createElement("div");
+    row.className = "pinned-item";
+    row.innerHTML = `
+      <div style="flex:1;">
+        <div class="pin-title">${escapeHtml(s.projectName)} — ${escapeHtml(s.submittalType)}</div>
+        <div class="pin-meta">${fmtScheduleDate(s.date)} · pinned by ${escapeHtml(s.pinnedByName || "")}</div>
+      </div>
+      ${canRemove ? `<button data-id="${s.id}">Unpin</button>` : ""}`;
+    if (canRemove) {
+      row.querySelector("button").addEventListener("click", () => schedulesCol().doc(s.id).delete());
+    }
+    container.appendChild(row);
+  });
+}
+
+function renderPinnedBanner() {
+  const banner = $("pinnedBanner");
+  if (!banner) return;
+  if (!allSchedules.length) { banner.classList.add("hidden"); banner.innerHTML = ""; return; }
+  banner.classList.remove("hidden");
+  banner.innerHTML = "";
+  allSchedules.slice(0, 3).forEach(s => {
+    const row = document.createElement("div");
+    row.className = "pinned-item";
+    row.innerHTML = `
+      <div style="flex:1;">
+        <div class="pin-title">📌 ${escapeHtml(s.projectName)} — ${escapeHtml(s.submittalType)}</div>
+        <div class="pin-meta">${fmtScheduleDate(s.date)}</div>
+      </div>`;
+    banner.appendChild(row);
+  });
+}
+
+$("addScheduleBtn").addEventListener("click", async () => {
+  $("scheduleError").textContent = "";
+  const projectName = $("scheduleProjectInput").value.trim();
+  const submittalType = $("scheduleTypeInput").value.trim();
+  const date = $("scheduleDateInput").value;
+  if (!projectName || !submittalType || !date) {
+    $("scheduleError").textContent = "Project name, submittal type, and date are all required.";
+    return;
+  }
+  await schedulesCol().add({
+    projectName, submittalType, date,
+    pinnedBy: currentUser.uid, pinnedByName: currentUserDoc.name, createdAt: nowTs()
+  });
+  $("scheduleProjectInput").value = "";
+  $("scheduleTypeInput").value = "";
+  $("scheduleDateInput").value = "";
+});
+
 // ---------- Chat ----------
 function listenChannels() {
   const unsub = db.collection("workspaces").doc(currentWorkspaceId).collection("channels")
@@ -454,6 +537,17 @@ function msgCol() {
   return db.collection("workspaces").doc(currentWorkspaceId).collection("channels").doc(activeChannelId).collection("messages");
 }
 
+function renderAttachment(m) {
+  if (!m.attachmentUrl) return "";
+  if (m.attachmentType === "image") {
+    return `<a href="${m.attachmentUrl}" target="_blank"><img class="msg-attachment-img" src="${m.attachmentUrl}" alt="attachment"></a>`;
+  }
+  if (m.attachmentType === "audio") {
+    return `<div class="msg-attachment-audio"><audio controls src="${m.attachmentUrl}"></audio></div>`;
+  }
+  return `<a class="msg-attachment-file" href="${m.attachmentUrl}" target="_blank" rel="noopener">📄 ${escapeHtml(m.attachmentName || "Document")}</a>`;
+}
+
 function listenMessages() {
   const unsub = msgCol().orderBy("createdAt", "asc").limitToLast(100).onSnapshot(snap => {
     const container = $("chatMessages");
@@ -462,12 +556,13 @@ function listenMessages() {
       const m = d.data();
       const div = document.createElement("div");
       div.className = "msg";
-      const rendered = escapeHtml(m.text).replace(/@([A-Za-z0-9 ]+?)(?=[\s.,!?]|$)/g, '<span class="mention-tag">@$1</span>');
+      const rendered = m.text ? escapeHtml(m.text).replace(/@([A-Za-z0-9 ]+?)(?=[\s.,!?]|$)/g, '<span class="mention-tag">@$1</span>') : "";
       div.innerHTML = `
         <div class="avatar">${initials(m.authorName)}</div>
         <div class="msg-body">
           <div class="msg-head"><span class="msg-author">${escapeHtml(m.authorName)}</span><span class="msg-time">${fmtDate(m.createdAt)}</span></div>
-          <div class="msg-text">${rendered}</div>
+          ${rendered ? `<div class="msg-text">${rendered}</div>` : ""}
+          ${renderAttachment(m)}
         </div>`;
       container.appendChild(div);
     });
@@ -524,24 +619,103 @@ $("chatInput").addEventListener("keydown", async (e) => {
   }
 });
 
+// ---------- Attachments (photos & documents) ----------
+let pendingAttachment = null; // { file, type: 'image'|'file' }
+
+$("chatFileBtn").addEventListener("click", () => $("chatFileInput").click());
+$("chatFileInput").addEventListener("change", () => {
+  const file = $("chatFileInput").files[0];
+  if (!file) return;
+  const isImage = file.type.startsWith("image/");
+  pendingAttachment = { file, type: isImage ? "image" : "file" };
+  showAttachPreview(file.name, isImage ? URL.createObjectURL(file) : null);
+});
+
+function showAttachPreview(name, imgUrl) {
+  const box = $("chatAttachPreview");
+  box.classList.remove("hidden");
+  box.innerHTML = `${imgUrl ? `<img src="${imgUrl}">` : "📄"} <span>${escapeHtml(name)}</span><button id="clearAttachBtn" type="button">✕</button>`;
+  $("clearAttachBtn").addEventListener("click", clearAttachment);
+}
+
+function clearAttachment() {
+  pendingAttachment = null;
+  $("chatFileInput").value = "";
+  $("chatAttachPreview").classList.add("hidden");
+  $("chatAttachPreview").innerHTML = "";
+}
+
+async function uploadToWorkspaceStorage(blob, filename) {
+  const path = `workspaces/${currentWorkspaceId}/chat/${activeChannelId}/${Date.now()}_${filename}`;
+  const ref = storage.ref(path);
+  await ref.put(blob);
+  return ref.getDownloadURL();
+}
+
+// ---------- Voice notes ----------
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+
+$("chatMicBtn").addEventListener("click", async () => {
+  if (isRecording) {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      isRecording = false;
+      $("chatMicBtn").classList.remove("recording");
+      stream.getTracks().forEach(t => t.stop());
+      if (!recordedChunks.length) return;
+      const blob = new Blob(recordedChunks, { type: "audio/webm" });
+      const filename = `voice-note-${Date.now()}.webm`;
+      const url = await uploadToWorkspaceStorage(blob, filename);
+      await msgCol().add({
+        text: "", attachmentUrl: url, attachmentType: "audio", attachmentName: filename,
+        authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
+      });
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    $("chatMicBtn").classList.add("recording");
+  } catch (err) {
+    alert("Microphone access denied or unavailable: " + err.message);
+  }
+});
+
 async function sendMessage() {
   const text = $("chatInput").value.trim();
-  if (!text) return;
+  if (!text && !pendingAttachment) return;
   $("chatInput").value = "";
   $("mentionDropdown").classList.add("hidden");
 
-  await msgCol().add({
-    text, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
-  });
+  const data = { text, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs() };
+
+  if (pendingAttachment) {
+    const url = await uploadToWorkspaceStorage(pendingAttachment.file, pendingAttachment.file.name);
+    data.attachmentUrl = url;
+    data.attachmentType = pendingAttachment.type;
+    data.attachmentName = pendingAttachment.file.name;
+    clearAttachment();
+  }
+
+  await msgCol().add(data);
 
   // Detect @mentions and notify
-  Object.entries(membersCache).forEach(([uid, m]) => {
-    if (uid === currentUser.uid) return;
-    const re = new RegExp(`@${m.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[\\s.,!?]|$)`, "i");
-    if (re.test(text)) {
-      pushNotification(uid, "mention", `${currentUserDoc.name} mentioned you: "${text.slice(0, 80)}"`, null);
-    }
-  });
+  if (text) {
+    Object.entries(membersCache).forEach(([uid, m]) => {
+      if (uid === currentUser.uid) return;
+      const re = new RegExp(`@${m.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[\\s.,!?]|$)`, "i");
+      if (re.test(text)) {
+        pushNotification(uid, "mention", `${currentUserDoc.name} mentioned you: "${text.slice(0, 80)}"`, null);
+      }
+    });
+  }
 }
 
 // ---------- Dashboard ----------
@@ -663,21 +837,44 @@ function listenNotifications() {
 $("notifBtn").addEventListener("click", () => $("notifModal").classList.remove("hidden"));
 $("closeNotifModal").addEventListener("click", () => $("notifModal").classList.add("hidden"));
 
-// ---------- Share Target intake (Outlook -> New Task) ----------
+// ---------- Share Target intake (Outlook -> Task or Chat) ----------
+let pendingShare = null;
 function handleShareTargetIntake() {
   const params = new URLSearchParams(window.location.search);
   const sharedTitle = params.get("shared_title");
   const sharedText = params.get("shared_text");
   if (sharedTitle || sharedText) {
-    setTimeout(() => {
-      switchView("tasks");
-      openTaskModal(null);
-      $("taskTitleInput").value = sharedTitle || "";
-      $("taskDescInput").value = sharedText || "";
-    }, 400);
+    pendingShare = { title: sharedTitle || "", text: sharedText || "" };
+    setTimeout(() => $("shareChoiceModal").classList.remove("hidden"), 400);
     window.history.replaceState({}, "", "index.html");
   }
 }
+
+$("closeShareChoiceModal").addEventListener("click", () => {
+  $("shareChoiceModal").classList.add("hidden");
+  pendingShare = null;
+});
+
+$("shareAsTaskBtn").addEventListener("click", () => {
+  if (!pendingShare) return;
+  $("shareChoiceModal").classList.add("hidden");
+  switchView("tasks");
+  openTaskModal(null);
+  $("taskTitleInput").value = pendingShare.title;
+  $("taskDescInput").value = pendingShare.text;
+  pendingShare = null;
+});
+
+$("shareToChatBtn").addEventListener("click", async () => {
+  if (!pendingShare) return;
+  $("shareChoiceModal").classList.add("hidden");
+  const combined = [pendingShare.title, pendingShare.text].filter(Boolean).join("\n");
+  switchView("chat");
+  await msgCol().add({
+    text: combined, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
+  });
+  pendingShare = null;
+});
 
 // ---------- Register service worker ----------
 if ("serviceWorker" in navigator) {
