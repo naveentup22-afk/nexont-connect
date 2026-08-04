@@ -620,17 +620,44 @@ function listenMessages() {
       const div = document.createElement("div");
       div.className = "msg";
       const rendered = escapeHtml(m.text).replace(/@([A-Za-z0-9 ]+?)(?=[\s.,!?]|$)/g, '<span class="mention-tag">@$1</span>');
+      const isMine = m.authorUid === currentUser.uid;
       div.innerHTML = `
         <div class="avatar">${initials(m.authorName)}</div>
         <div class="msg-body">
-          <div class="msg-head"><span class="msg-author">${escapeHtml(m.authorName)}</span><span class="msg-time">${fmtDate(m.createdAt)}</span></div>
-          <div class="msg-text">${rendered}</div>
+          <div class="msg-head">
+            <span class="msg-author">${escapeHtml(m.authorName)}</span>
+            <span class="msg-time">${fmtDate(m.createdAt)}${m.edited ? ' · <span class="msg-edited">edited</span>' : ""}</span>
+            ${isMine ? `<button class="msg-edit-btn" data-id="${d.id}">Edit</button>` : ""}
+          </div>
+          <div class="msg-text" id="msgText-${d.id}">${rendered}</div>
         </div>`;
+      if (isMine) {
+        div.querySelector(".msg-edit-btn").addEventListener("click", () => startEditMessage(d.id, m.text));
+      }
       container.appendChild(div);
     });
     container.scrollTop = container.scrollHeight;
   });
   unsubscribers.push(unsub);
+}
+
+function startEditMessage(msgId, currentText) {
+  const textDiv = $(`msgText-${msgId}`);
+  if (!textDiv) return;
+  const originalHtml = textDiv.innerHTML;
+  textDiv.innerHTML = `
+    <textarea class="msg-edit-input" id="msgEditInput-${msgId}">${currentText}</textarea>
+    <div class="msg-edit-actions">
+      <button class="btn-secondary" id="msgEditCancel-${msgId}">Cancel</button>
+      <button class="btn-primary" id="msgEditSave-${msgId}">Save</button>
+    </div>`;
+  $(`msgEditInput-${msgId}`).focus();
+  $(`msgEditCancel-${msgId}`).addEventListener("click", () => { textDiv.innerHTML = originalHtml; });
+  $(`msgEditSave-${msgId}`).addEventListener("click", async () => {
+    const newText = $(`msgEditInput-${msgId}`).value.trim();
+    if (!newText) return;
+    await msgCol().doc(msgId).update({ text: newText, edited: true, editedAt: nowTs() });
+  });
 }
 
 let mentionQuery = null;
