@@ -372,6 +372,21 @@ a { color: inherit; }
 .comment-time { color: var(--text-muted); }
 .comment-text { font-size: 13px; line-height: 1.5; }
 
+/* ========== Allowance ========== */
+.allowance-report-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.allowance-report-head h4 { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.allowance-member-group { margin-bottom: 16px; }
+.allowance-member-group:last-child { margin-bottom: 0; }
+.allowance-member-group-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.allowance-entry {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface-2); border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 8px; font-size: 13px;
+}
+.allowance-entry:last-child { margin-bottom: 0; }
+.allowance-entry .ae-meta { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.allowance-entry .danger-btn { flex-shrink: 0; }
+
 /* ========== Settings ========== */
 .settings-section { max-width: 480px; display: flex; flex-direction: column; gap: 18px; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); }
