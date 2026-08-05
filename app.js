@@ -308,6 +308,8 @@ async function enterWorkspace() {
   listenAllowances();
   listenProjects();
   listenRfiEntries();
+  listenNotes();
+  listenFlags();
 }
 
 // ---------- Navigation ----------
@@ -330,7 +332,7 @@ function switchView(view) {
   document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   $(`view-${view}`).classList.remove("hidden");
-  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", schedules: "Schedules", dashboard: "Dashboard", allowance: "Allowance", rfi: "RFI Log", members: "Manage Members", settings: "Settings" };
+  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", schedules: "Schedules", dashboard: "Dashboard", allowance: "Allowance", rfi: "RFI Log", notes: "Sticky Notes", flags: "Flags", members: "Manage Members", settings: "Settings" };
   $("viewTitle").textContent = titles[view];
   $("fabAddTask").classList.toggle("hidden", !["today", "tasks"].includes(view));
   if (view === "dashboard") renderDashboard();
@@ -1525,6 +1527,149 @@ $("shareToChatBtn").addEventListener("click", async () => {
     text: combined, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
   });
   pendingShare = null;
+});
+
+// ---------- Sticky Notes (personal, private per user) ----------
+function notesCol() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("stickyNotes");
+}
+
+let selectedNoteColor = "yellow";
+let myNotes = [];
+
+document.querySelectorAll("#noteColorRow .sticky-color-dot").forEach(dot => {
+  dot.addEventListener("click", () => {
+    document.querySelectorAll("#noteColorRow .sticky-color-dot").forEach(d => d.classList.remove("active"));
+    dot.classList.add("active");
+    selectedNoteColor = dot.dataset.color;
+  });
+});
+
+function listenNotes() {
+  const unsub = notesCol().where("ownerUid", "==", currentUser.uid).orderBy("createdAt", "desc").onSnapshot(snap => {
+    myNotes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderNotesGrid();
+  });
+  unsubscribers.push(unsub);
+}
+
+function renderNotesGrid() {
+  const grid = $("notesGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  if (!myNotes.length) { grid.innerHTML = emptyState("No sticky notes yet — jot one down above."); return; }
+  myNotes.forEach(n => {
+    const card = document.createElement("div");
+    card.className = `sticky-note color-${n.color || "yellow"}`;
+    card.innerHTML = `
+      <button class="sticky-note-del" data-id="${n.id}">✕</button>
+      <div class="sticky-note-text">${escapeHtml(n.text)}</div>`;
+    card.querySelector(".sticky-note-del").addEventListener("click", () => notesCol().doc(n.id).delete());
+    grid.appendChild(card);
+  });
+}
+
+$("addNoteBtn").addEventListener("click", async () => {
+  const text = $("newNoteInput").value.trim();
+  if (!text) return;
+  await notesCol().add({
+    text, color: selectedNoteColor, ownerUid: currentUser.uid, createdAt: nowTs()
+  });
+  $("newNoteInput").value = "";
+});
+
+// ---------- Flags (approval / fab-stage watch points) ----------
+function flagsCol() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("flags");
+}
+
+let allFlags = [];
+function listenFlags() {
+  const unsub = flagsCol().orderBy("createdAt", "desc").onSnapshot(snap => {
+    allFlags = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderFlags();
+    populateFlagTaskDropdown();
+  });
+  unsubscribers.push(unsub);
+}
+
+function populateFlagTaskDropdown() {
+  const select = $("flagTaskInput");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = `<option value="">General — not tied to a specific task</option>` +
+    allTasks.map(t => `<option value="${t.id}">${escapeHtml(t.title)}</option>`).join("");
+  if (current && allTasks.some(t => t.id === current)) select.value = current;
+}
+
+function fmtFlagDate(ts) {
+  return ts ? fmtDate(ts) : "";
+}
+
+function renderFlags() {
+  const openContainer = $("openFlagsContainer");
+  const resolvedContainer = $("resolvedFlagsContainer");
+  if (!openContainer || !resolvedContainer) return;
+
+  const open = allFlags.filter(f => !f.resolved);
+  const resolved = allFlags.filter(f => f.resolved);
+
+  $("flagsBadge").textContent = open.length;
+  $("flagsBadge").classList.toggle("hidden", open.length === 0);
+
+  openContainer.innerHTML = "";
+  if (!open.length) { openContainer.innerHTML = emptyState("No open flags — nothing pending review."); }
+  open.forEach(f => openContainer.appendChild(renderFlagRow(f, false)));
+
+  resolvedContainer.innerHTML = "";
+  if (!resolved.length) { resolvedContainer.innerHTML = emptyState("Nothing resolved yet."); }
+  resolved.forEach(f => resolvedContainer.appendChild(renderFlagRow(f, true)));
+}
+
+function renderFlagRow(f, isResolved) {
+  const row = document.createElement("div");
+  row.className = "flag-item" + (isResolved ? " resolved" : "");
+  row.innerHTML = `
+    <div class="flag-text">
+      ${f.taskTitle ? `<span class="flag-task-tag">${escapeHtml(f.taskTitle)}</span>` : ""}
+      ${escapeHtml(f.text)}
+      <div class="flag-meta">Raised by ${escapeHtml(f.createdByName || "")} · ${fmtFlagDate(f.createdAt)}${isResolved ? ` · Resolved by ${escapeHtml(f.resolvedByName || "")}` : ""}</div>
+    </div>
+    <div class="flag-item-actions"></div>`;
+  const actions = row.querySelector(".flag-item-actions");
+  if (!isResolved) {
+    const resolveBtn = document.createElement("button");
+    resolveBtn.className = "btn-secondary";
+    resolveBtn.textContent = "Mark resolved";
+    resolveBtn.addEventListener("click", () => {
+      flagsCol().doc(f.id).update({
+        resolved: true, resolvedBy: currentUser.uid, resolvedByName: currentUserDoc.name, resolvedAt: nowTs()
+      });
+    });
+    actions.appendChild(resolveBtn);
+  }
+  if (f.createdBy === currentUser.uid || currentWorkspaceRole === "admin") {
+    const delBtn = document.createElement("button");
+    delBtn.className = "danger-btn";
+    delBtn.textContent = "Delete";
+    delBtn.addEventListener("click", () => flagsCol().doc(f.id).delete());
+    actions.appendChild(delBtn);
+  }
+  return row;
+}
+
+$("addFlagBtn").addEventListener("click", async () => {
+  $("flagError").textContent = "";
+  const text = $("flagTextInput").value.trim();
+  const taskId = $("flagTaskInput").value;
+  const task = taskId ? allTasks.find(t => t.id === taskId) : null;
+  if (!text) { $("flagError").textContent = "Enter what the team should watch for."; return; }
+  await flagsCol().add({
+    text, taskId: taskId || null, taskTitle: task ? task.title : null,
+    resolved: false, createdBy: currentUser.uid, createdByName: currentUserDoc.name, createdAt: nowTs()
+  });
+  $("flagTextInput").value = "";
+  $("flagTaskInput").value = "";
 });
 
 // ---------- Register service worker ----------
