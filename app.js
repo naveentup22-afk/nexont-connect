@@ -300,6 +300,10 @@ async function enterWorkspace() {
   populateAssigneeDropdown();
   renderMembersView();
   listenTasks();
+  readState = {};
+  unreadCounts = {};
+  watchedChannels = new Set();
+  listenReadState();
   listenChannels();
   listenNotifications();
   listenSchedules();
@@ -336,6 +340,7 @@ function switchView(view) {
   $("viewTitle").textContent = titles[view];
   $("fabAddTask").classList.toggle("hidden", !["today", "tasks"].includes(view));
   if (view === "dashboard") renderDashboard();
+  if (view === "chat") markChannelRead(activeChannelId);
 }
 
 // ---------- Tasks ----------
@@ -1213,12 +1218,63 @@ $("exportRfiBtn").addEventListener("click", () => {
 });
 
 // ---------- Chat ----------
+let readState = {};       // channelId -> millis of last read
+let unreadCounts = {};    // channelId -> unread count
+let watchedChannels = new Set();
+
+function readStateRef() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("readState").doc(currentUser.uid);
+}
+
+function markChannelRead(channelId) {
+  readStateRef().set({ [channelId]: nowTs() }, { merge: true }).catch(() => {});
+  readState[channelId] = Date.now();
+  unreadCounts[channelId] = 0;
+  recomputeChatBadge();
+}
+
+function listenReadState() {
+  const unsub = readStateRef().onSnapshot(snap => {
+    const data = snap.data() || {};
+    Object.entries(data).forEach(([ch, ts]) => { readState[ch] = ts?.toMillis?.() || 0; });
+  }, () => {});
+  unsubscribers.push(unsub);
+}
+
+function watchChannelUnread(channelId) {
+  if (watchedChannels.has(channelId)) return;
+  watchedChannels.add(channelId);
+  const unsub = db.collection("workspaces").doc(currentWorkspaceId).collection("channels").doc(channelId)
+    .collection("messages").orderBy("createdAt", "desc").limit(30)
+    .onSnapshot(snap => {
+      const lastRead = readState[channelId] || 0;
+      let count = 0;
+      snap.forEach(d => {
+        const m = d.data();
+        const ts = m.createdAt?.toMillis?.() || 0;
+        if (m.authorUid !== currentUser.uid && ts > lastRead) count++;
+      });
+      unreadCounts[channelId] = count;
+      recomputeChatBadge();
+    }, () => {});
+  unsubscribers.push(unsub);
+}
+
+function recomputeChatBadge() {
+  const total = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+  const badge = $("chatBadge");
+  if (!badge) return;
+  badge.textContent = total;
+  badge.classList.toggle("hidden", total === 0);
+}
+
 function listenChannels() {
   const unsub = db.collection("workspaces").doc(currentWorkspaceId).collection("channels")
     .onSnapshot(snap => {
       const list = $("channelList");
       list.querySelectorAll(".channel-item").forEach(el => el.remove());
       snap.forEach(doc => {
+        watchChannelUnread(doc.id);
         const item = document.createElement("div");
         item.className = "channel-item" + (doc.id === activeChannelId ? " active" : "");
         item.textContent = "# " + doc.data().name;
@@ -1227,6 +1283,7 @@ function listenChannels() {
           list.querySelectorAll(".channel-item").forEach(el => el.classList.remove("active"));
           item.classList.add("active");
           listenMessages();
+          markChannelRead(activeChannelId);
         });
         list.appendChild(item);
       });
@@ -1482,7 +1539,6 @@ function listenNotifications() {
         list.appendChild(item);
       });
       $("notifDot").classList.toggle("hidden", unread === 0);
-      $("chatBadge").classList.toggle("hidden", true); // reserved for future unread-chat count
     });
   unsubscribers.push(unsub);
 }
