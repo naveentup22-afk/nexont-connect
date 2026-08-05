@@ -1546,9 +1546,12 @@ document.querySelectorAll("#noteColorRow .sticky-color-dot").forEach(dot => {
 });
 
 function listenNotes() {
-  const unsub = notesCol().where("ownerUid", "==", currentUser.uid).orderBy("createdAt", "desc").onSnapshot(snap => {
+  const unsub = notesCol().where("ownerUid", "==", currentUser.uid).onSnapshot(snap => {
     myNotes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    myNotes.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     renderNotesGrid();
+  }, err => {
+    console.error("Notes listener error:", err);
   });
   unsubscribers.push(unsub);
 }
