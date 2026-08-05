@@ -580,6 +580,7 @@ function listenSchedules() {
   const unsub = schedulesCol().orderBy("date", "asc").onSnapshot(snap => {
     allSchedules = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderSchedulesList();
+    renderScheduleLogs();
     renderPinnedBanner();
   });
   unsubscribers.push(unsub);
@@ -591,15 +592,25 @@ function fmtScheduleDate(dateStr) {
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function populateScheduleProjectDropdown() {
+  const select = $("scheduleProjectInput");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = `<option value="">Select a project</option>` +
+    allProjects.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join("");
+  if (current) select.value = current;
+}
+
 function renderSchedulesList() {
   const container = $("schedulesListContainer");
   if (!container) return;
+  const pinned = allSchedules.filter(s => s.status !== "Completed");
   container.innerHTML = "";
-  if (!allSchedules.length) {
+  if (!pinned.length) {
     container.innerHTML = emptyState("No pinned schedules yet.");
     return;
   }
-  allSchedules.forEach(s => {
+  pinned.forEach(s => {
     const canRemove = s.pinnedBy === currentUser.uid || currentWorkspaceRole === "admin";
     const row = document.createElement("div");
     row.className = "pinned-item";
@@ -607,22 +618,66 @@ function renderSchedulesList() {
       <div style="flex:1;">
         <div class="pin-title">${escapeHtml(s.projectName)} — ${escapeHtml(s.submittalType)}</div>
         <div class="pin-meta">${fmtScheduleDate(s.date)} · pinned by ${escapeHtml(s.pinnedByName || "")}</div>
-      </div>
-      ${canRemove ? `<button data-id="${s.id}">Unpin</button>` : ""}`;
+      </div>`;
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+    // Only Team Lead can mark a schedule complete.
+    if (currentWorkspaceRole === "admin") {
+      const completeBtn = document.createElement("button");
+      completeBtn.className = "btn-secondary";
+      completeBtn.textContent = "Mark Complete";
+      completeBtn.addEventListener("click", () => {
+        schedulesCol().doc(s.id).update({
+          status: "Completed", completedBy: currentUser.uid, completedByName: currentUserDoc.name, completedAt: todayStr()
+        });
+      });
+      actions.appendChild(completeBtn);
+    }
     if (canRemove) {
-      row.querySelector("button").addEventListener("click", () => schedulesCol().doc(s.id).delete());
+      const unpinBtn = document.createElement("button");
+      unpinBtn.textContent = "Unpin";
+      unpinBtn.addEventListener("click", () => schedulesCol().doc(s.id).delete());
+      actions.appendChild(unpinBtn);
+    }
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
+function renderScheduleLogs() {
+  const container = $("scheduleLogsContainer");
+  if (!container) return;
+  const logs = allSchedules.filter(s => s.status === "Completed");
+  container.innerHTML = "";
+  if (!logs.length) { container.innerHTML = emptyState("No completed schedules yet."); return; }
+  logs.forEach(s => {
+    const row = document.createElement("div");
+    row.className = "pinned-item";
+    row.innerHTML = `
+      <div style="flex:1;">
+        <div class="pin-title">${escapeHtml(s.projectName)} — ${escapeHtml(s.submittalType)}</div>
+        <div class="pin-meta">Due ${fmtScheduleDate(s.date)} · pinned by ${escapeHtml(s.pinnedByName || "")} · completed by ${escapeHtml(s.completedByName || "")} on ${fmtScheduleDate(s.completedAt)}</div>
+      </div>`;
+    if (currentWorkspaceRole === "admin") {
+      const delBtn = document.createElement("button");
+      delBtn.className = "danger-btn";
+      delBtn.textContent = "Delete";
+      delBtn.addEventListener("click", () => schedulesCol().doc(s.id).delete());
+      row.appendChild(delBtn);
     }
     container.appendChild(row);
   });
 }
 
 function renderPinnedBanner() {
+  const pinned = allSchedules.filter(s => s.status !== "Completed");
   [$("pinnedBanner"), $("pinnedBannerChat")].forEach(banner => {
     if (!banner) return;
-    if (!allSchedules.length) { banner.classList.add("hidden"); banner.innerHTML = ""; return; }
+    if (!pinned.length) { banner.classList.add("hidden"); banner.innerHTML = ""; return; }
     banner.classList.remove("hidden");
     banner.innerHTML = "";
-    allSchedules.slice(0, 3).forEach(s => {
+    pinned.slice(0, 3).forEach(s => {
       const row = document.createElement("div");
       row.className = "pinned-item";
       row.innerHTML = `
@@ -637,15 +692,15 @@ function renderPinnedBanner() {
 
 $("addScheduleBtn").addEventListener("click", async () => {
   $("scheduleError").textContent = "";
-  const projectName = $("scheduleProjectInput").value.trim();
+  const projectName = $("scheduleProjectInput").value;
   const submittalType = $("scheduleTypeInput").value.trim();
   const date = $("scheduleDateInput").value;
   if (!projectName || !submittalType || !date) {
-    $("scheduleError").textContent = "Project name, submittal type, and date are all required.";
+    $("scheduleError").textContent = "Project, submittal type, and date are all required.";
     return;
   }
   await schedulesCol().add({
-    projectName, submittalType, date,
+    projectName, submittalType, date, status: "Pinned",
     pinnedBy: currentUser.uid, pinnedByName: currentUserDoc.name, createdAt: nowTs()
   });
   $("scheduleProjectInput").value = "";
@@ -878,6 +933,7 @@ function listenProjects() {
     allProjects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderProjectsList();
     populateProjectDropdowns();
+    populateScheduleProjectDropdown();
     renderRfiDashboard();
   });
   unsubscribers.push(unsub);
