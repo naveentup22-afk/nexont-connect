@@ -121,6 +121,13 @@
       <button class="nav-item" data-view="rfi">
         <span>RFI Log</span>
       </button>
+      <button class="nav-item" data-view="notes">
+        <span>Sticky Notes</span>
+      </button>
+      <button class="nav-item" data-view="flags">
+        <span>Flags</span>
+        <span class="badge hidden" id="flagsBadge">0</span>
+      </button>
       <button class="nav-item hidden" data-view="members" id="navMembers">
         <span>Manage Members</span>
       </button>
@@ -440,6 +447,48 @@
       <div class="panel">
         <h3>Dashboard</h3>
         <div id="rfiDashboardContainer"></div>
+      </div>
+    </div>
+
+    <!-- STICKY NOTES VIEW (personal, private) -->
+    <div class="view hidden" id="view-notes">
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>New sticky note</h3>
+        <div class="sticky-color-row" id="noteColorRow">
+          <button type="button" class="sticky-color-dot color-yellow active" data-color="yellow"></button>
+          <button type="button" class="sticky-color-dot color-pink" data-color="pink"></button>
+          <button type="button" class="sticky-color-dot color-blue" data-color="blue"></button>
+          <button type="button" class="sticky-color-dot color-green" data-color="green"></button>
+        </div>
+        <textarea id="newNoteInput" rows="2" placeholder="Write a quick note to yourself..." style="margin-top:10px;"></textarea>
+        <button class="btn-primary" id="addNoteBtn" style="margin-top:10px;">Add note</button>
+      </div>
+      <div class="sticky-notes-grid" id="notesGrid"></div>
+    </div>
+
+    <!-- FLAGS VIEW -->
+    <div class="view hidden" id="view-flags">
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>Raise a flag</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">Something the team should watch for during approval or fab stage — visible to everyone so nothing gets missed.</p>
+        <div class="field" style="margin-top:10px;">
+          <label>What should the team watch for?</label>
+          <textarea id="flagTextInput" rows="2" placeholder="e.g. Confirm anchor bolt spacing before shop drawing approval"></textarea>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label>Link to a task (optional)</label>
+          <select id="flagTaskInput"><option value="">General — not tied to a specific task</option></select>
+        </div>
+        <div class="auth-error" id="flagError"></div>
+        <button class="btn-primary" id="addFlagBtn" style="margin-top:10px;">Raise flag</button>
+      </div>
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>Open flags</h3>
+        <div id="openFlagsContainer"></div>
+      </div>
+      <div class="panel">
+        <h3>Resolved</h3>
+        <div id="resolvedFlagsContainer"></div>
       </div>
     </div>
 
