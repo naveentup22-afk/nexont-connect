@@ -200,7 +200,7 @@
         <div class="field-row" style="margin-top:10px;">
           <div class="field">
             <label>Project Name</label>
-            <input type="text" id="scheduleProjectInput" placeholder="e.g. Riverside Tower">
+            <select id="scheduleProjectInput"><option value="">Select a project</option></select>
           </div>
           <div class="field">
             <label>Submittal Type</label>
@@ -214,9 +214,13 @@
         </div>
         <div class="auth-error" id="scheduleError"></div>
       </div>
-      <div class="panel">
+      <div class="panel" style="margin-bottom:16px;">
         <h3>Pinned schedules</h3>
         <div id="schedulesListContainer"></div>
+      </div>
+      <div class="panel">
+        <h3>Logs</h3>
+        <div id="scheduleLogsContainer"></div>
       </div>
     </div>
 
