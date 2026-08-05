@@ -338,6 +338,33 @@ a { color: inherit; }
 .pinned-item .pin-title { font-weight: 700; flex: 1; }
 .pinned-item .pin-meta { color: var(--text-muted); font-size: 12px; }
 .pinned-item button { color: var(--danger); font-size: 12px; }
+
+/* ========== Sticky Notes ========== */
+.sticky-color-row { display: flex; gap: 8px; }
+.sticky-color-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+.sticky-color-dot.active { border-color: var(--text); }
+.sticky-color-dot.color-yellow { background: #FDE68A; }
+.sticky-color-dot.color-pink { background: #FBCFE8; }
+.sticky-color-dot.color-blue { background: #BFDBFE; }
+.sticky-color-dot.color-green { background: #BBF7D0; }
+.sticky-notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.sticky-note { border-radius: 10px; padding: 14px; min-height: 120px; display: flex; flex-direction: column; box-shadow: 0 2px 6px rgba(0,0,0,0.08); position: relative; }
+.sticky-note.color-yellow { background: #FDE68A; color: #4a3b00; }
+.sticky-note.color-pink { background: #FBCFE8; color: #5c1a3a; }
+.sticky-note.color-blue { background: #BFDBFE; color: #1a2f5c; }
+.sticky-note.color-green { background: #BBF7D0; color: #0d3b1f; }
+.sticky-note-text { flex: 1; white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
+.sticky-note-del { position: absolute; top: 8px; right: 10px; font-weight: 700; opacity: 0.6; }
+.sticky-note-del:hover { opacity: 1; }
+
+/* ========== Flags ========== */
+.flag-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; background: var(--surface-2); border-left: 3px solid #EF4444; border-radius: 8px; font-size: 13px; margin-bottom: 8px; }
+.flag-item.resolved { border-left-color: var(--text-muted); opacity: 0.65; }
+.flag-item .flag-text { flex: 1; }
+.flag-item .flag-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.flag-item .flag-task-tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--brand); background: var(--brand-soft); padding: 1px 8px; border-radius: 999px; margin-right: 6px; }
+.flag-item-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.flag-item-actions button { font-size: 12px; }
 .mention-dropdown {
   position: absolute; bottom: 62px; left: 24px;
   background: var(--surface); border: 1px solid var(--border);
