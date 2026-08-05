@@ -161,6 +161,19 @@ $("saveWorkspaceNameBtn").addEventListener("click", async () => {
   }
 });
 
+$("saveEmpDetailsBtn").addEventListener("click", async () => {
+  $("empDetailsError").textContent = "";
+  const empId = $("empIdInput").value.trim();
+  const department = $("empDeptInput").value.trim();
+  const location = $("empLocationInput").value.trim();
+  try {
+    await db.collection("users").doc(currentUser.uid).update({ empId, department, location });
+    currentUserDoc.empId = empId; currentUserDoc.department = department; currentUserDoc.location = location;
+  } catch (err) {
+    $("empDetailsError").textContent = err.message;
+  }
+});
+
 $("logoutBtn").addEventListener("click", () => auth.signOut());
 
 $("exitWorkspaceBtn").addEventListener("click", async () => {
@@ -204,6 +217,9 @@ auth.onAuthStateChanged(async (user) => {
   $("settingsUserName").textContent = currentUserDoc.name;
   $("settingsUserEmail").textContent = user.email;
   applyAccountTypeUI(currentUserDoc.accountType);
+  $("empIdInput").value = currentUserDoc.empId || "";
+  $("empDeptInput").value = currentUserDoc.department || "";
+  $("empLocationInput").value = currentUserDoc.location || "";
 
   await loadWorkspaces();
   handleShareTargetIntake();
@@ -290,6 +306,8 @@ async function enterWorkspace() {
   listenLeave();
   $("teamAllowancePanel").classList.toggle("hidden", currentWorkspaceRole !== "admin");
   listenAllowances();
+  listenProjects();
+  listenRfiEntries();
 }
 
 // ---------- Navigation ----------
@@ -312,7 +330,7 @@ function switchView(view) {
   document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   $(`view-${view}`).classList.remove("hidden");
-  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", schedules: "Schedules", dashboard: "Dashboard", allowance: "Allowance", members: "Manage Members", settings: "Settings" };
+  const titles = { today: "Today's Tasks", tasks: "All Tasks", chat: "Chat", schedules: "Schedules", dashboard: "Dashboard", allowance: "Allowance", rfi: "RFI Log", members: "Manage Members", settings: "Settings" };
   $("viewTitle").textContent = titles[view];
   $("fabAddTask").classList.toggle("hidden", !["today", "tasks"].includes(view));
   if (view === "dashboard") renderDashboard();
@@ -681,8 +699,8 @@ function renderAllowanceEntry(a, canDelete) {
   div.className = "allowance-entry";
   const isCabFood = a.type === "cabfood";
   const detail = isCabFood
-    ? `Login ${escapeHtml(a.loginTime || "—")} · Logout ${escapeHtml(a.logoutTime || "—")}`
-    : `${escapeHtml(a.project || "—")} · ${escapeHtml(a.dayType || "—")}${a.description ? " · " + escapeHtml(a.description) : ""}`;
+    ? `${escapeHtml(a.project || "—")} · Login ${escapeHtml(a.loginTime || "—")} · Logout ${escapeHtml(a.logoutTime || "—")}`
+    : `${escapeHtml(a.project || "—")} (${escapeHtml(a.projectId || "—")}) · ${escapeHtml(a.client || "—")} · ${escapeHtml(a.status || "—")} · ${escapeHtml(a.dayType || "—")}${a.description ? "<br>" + escapeHtml(a.description) : ""}${a.remarks ? "<br>Remarks: " + escapeHtml(a.remarks) : ""}`;
   div.innerHTML = `
     <div>
       <div style="font-weight:600;">${isCabFood ? "🚕 Cab/Food" : "🗓️ Weekend Working"} — ${fmtAllowanceDate(a.date)}</div>
@@ -734,6 +752,7 @@ $("addAllowanceBtn").addEventListener("click", async () => {
   try {
     if (allowanceType === "cabfood") {
       const date = $("cfDateInput").value;
+      const project = $("cfProjectInput").value.trim();
       const loginTime = $("cfLoginInput").value;
       const logoutTime = $("cfLogoutInput").value;
       if (!date || !loginTime || !logoutTime) {
@@ -741,57 +760,398 @@ $("addAllowanceBtn").addEventListener("click", async () => {
         return;
       }
       await allowanceCol().add({
-        type: "cabfood", date, loginTime, logoutTime,
+        type: "cabfood", date, project, loginTime, logoutTime,
         uid: currentUser.uid, userName: currentUserDoc.name, createdAt: nowTs()
       });
-      $("cfDateInput").value = ""; $("cfLoginInput").value = ""; $("cfLogoutInput").value = "";
+      $("cfDateInput").value = ""; $("cfProjectInput").value = ""; $("cfLoginInput").value = ""; $("cfLogoutInput").value = "";
     } else {
       const date = $("wkDateInput").value;
-      const project = $("wkProjectInput").value.trim();
-      const description = $("wkDescInput").value.trim();
       const dayType = $("wkDayTypeInput").value;
+      const projectId = $("wkProjectIdInput").value.trim();
+      const client = $("wkClientInput").value.trim();
+      const project = $("wkProjectInput").value.trim();
+      const status = $("wkStatusInput").value;
+      const description = $("wkDescInput").value.trim();
+      const remarks = $("wkRemarksInput").value.trim();
       if (!date || !project) {
-        $("allowanceError").textContent = "Date and project are required.";
+        $("allowanceError").textContent = "Date and project name are required.";
         return;
       }
       await allowanceCol().add({
-        type: "weekend", date, project, description, dayType,
+        type: "weekend", date, dayType, projectId, client, project, status, description, remarks,
         uid: currentUser.uid, userName: currentUserDoc.name, createdAt: nowTs()
       });
-      $("wkDateInput").value = ""; $("wkProjectInput").value = ""; $("wkDescInput").value = ""; $("wkDayTypeInput").value = "Full day";
+      $("wkDateInput").value = ""; $("wkProjectIdInput").value = ""; $("wkClientInput").value = "";
+      $("wkProjectInput").value = ""; $("wkDescInput").value = ""; $("wkRemarksInput").value = "";
+      $("wkDayTypeInput").value = "Full day"; $("wkStatusInput").value = "Running Project/Upload";
     }
   } catch (err) {
     $("allowanceError").textContent = err.message;
   }
 });
 
-function downloadCsv(filename, rows) {
-  const csv = rows.map(r => r.map(cell => {
-    const s = String(cell ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function to12Hour(t) {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  return `${hour12}.${String(m).padStart(2, "0")} ${period}`;
 }
 
-$("exportCabFoodBtn").addEventListener("click", () => {
-  const rows = [["Member", "Date", "Login Time", "Logout Time"]];
-  allAllowances.filter(a => a.type === "cabfood").forEach(a => {
-    rows.push([membersCache[a.uid]?.name || a.userName || "Unknown", a.date, a.loginTime, a.logoutTime]);
+async function fetchEmployeeDetails(uids) {
+  const unique = [...new Set(uids)];
+  const snaps = await Promise.all(unique.map(uid => db.collection("users").doc(uid).get()));
+  const map = {};
+  snaps.forEach((snap, i) => { map[unique[i]] = snap.exists ? snap.data() : {}; });
+  return map;
+}
+
+$("exportCabFoodBtn").addEventListener("click", async () => {
+  const entries = allAllowances.filter(a => a.type === "cabfood");
+  const empMap = await fetchEmployeeDetails(entries.map(e => e.uid));
+  const rows = [["S.NO", "EMP.ID", "NAME", "Department", "Location", "Date", "Project Name", "In Time", "Out Time", "Extra Working Days"]];
+  entries.forEach((e, i) => {
+    const emp = empMap[e.uid] || {};
+    rows.push([
+      i + 1,
+      emp.empId || "",
+      membersCache[e.uid]?.name || e.userName || "Unknown",
+      emp.department || "",
+      emp.location || "",
+      e.date || "",
+      e.project || "",
+      to12Hour(e.loginTime),
+      to12Hour(e.logoutTime),
+      ""
+    ]);
   });
-  downloadCsv(`cab-food-allowance-${todayStr()}.csv`, rows);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Food and Cab Bill");
+  XLSX.writeFile(wb, `food-and-cab-bill-${todayStr()}.xlsx`);
 });
 
-$("exportWeekendBtn").addEventListener("click", () => {
-  const rows = [["Member", "Date", "Project", "Work Description", "Day Type"]];
-  allAllowances.filter(a => a.type === "weekend").forEach(a => {
-    rows.push([membersCache[a.uid]?.name || a.userName || "Unknown", a.date, a.project, a.description, a.dayType]);
+$("exportWeekendBtn").addEventListener("click", async () => {
+  const entries = allAllowances.filter(a => a.type === "weekend");
+  const empMap = await fetchEmployeeDetails(entries.map(e => e.uid));
+  const byDate = {};
+  entries.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+  const wb = XLSX.utils.book_new();
+  const dates = Object.keys(byDate).sort();
+  const header = ["S.No", "EMP ID", "EMP NAME", "DEPARTMENT", "Project ID", "Client Name", "Project Name", "Project Status", "Work Planned", "Day Type", "Remarks"];
+  if (!dates.length) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["No entries yet"]]), "Weekend Working");
+  } else {
+    dates.forEach(date => {
+      const rows = [header];
+      byDate[date].forEach((e, i) => {
+        const emp = empMap[e.uid] || {};
+        rows.push([
+          i + 1, emp.empId || "", membersCache[e.uid]?.name || e.userName || "Unknown", emp.department || "",
+          e.projectId || "", e.client || "", e.project || "", e.status || "",
+          e.description || "", e.dayType || "", e.remarks || ""
+        ]);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const sheetName = date.replace(/[\\/?*\[\]:]/g, "-").slice(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+  }
+  XLSX.writeFile(wb, `weekend-working-${todayStr()}.xlsx`);
+});
+
+// ---------- Projects & RFI Log ----------
+let allProjects = [];
+let allRfiEntries = [];
+let rfiFilterProjectId = "";
+
+function projectsCol() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("projects");
+}
+function rfiCol() {
+  return db.collection("workspaces").doc(currentWorkspaceId).collection("rfiEntries");
+}
+
+function listenProjects() {
+  const unsub = projectsCol().orderBy("name").onSnapshot(snap => {
+    allProjects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderProjectsList();
+    populateProjectDropdowns();
+    renderRfiDashboard();
   });
-  downloadCsv(`weekend-working-${todayStr()}.csv`, rows);
+  unsubscribers.push(unsub);
+}
+
+function fmtProjectDate(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function renderProjectsList() {
+  const container = $("projectsListContainer");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!allProjects.length) { container.innerHTML = emptyState("No projects yet."); return; }
+  allProjects.forEach(p => {
+    const status = p.status || "Ongoing";
+    const isCompleted = status === "Completed";
+    const div = document.createElement("div");
+    div.className = "project-item";
+
+    const info = document.createElement("div");
+    info.className = "project-item-info";
+    info.innerHTML = `
+      <span>${escapeHtml(p.name)}</span>
+      <span class="project-item-meta">Started ${fmtProjectDate(p.startDate)}${isCompleted ? " · Completed " + fmtProjectDate(p.completedDate) : ""}</span>`;
+    div.appendChild(info);
+
+    const actions = document.createElement("div");
+    actions.className = "project-item-actions";
+
+    const pill = document.createElement("span");
+    pill.className = "project-status-pill " + (isCompleted ? "project-status-completed" : "project-status-ongoing");
+    pill.textContent = status;
+    actions.appendChild(pill);
+
+    // Only Team Lead can flip a project's status.
+    if (currentWorkspaceRole === "admin") {
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "btn-secondary";
+      toggleBtn.textContent = isCompleted ? "Mark Ongoing" : "Mark Completed";
+      toggleBtn.addEventListener("click", () => {
+        if (isCompleted) {
+          projectsCol().doc(p.id).update({ status: "Ongoing", completedDate: null });
+        } else {
+          projectsCol().doc(p.id).update({ status: "Completed", completedDate: todayStr() });
+        }
+      });
+      actions.appendChild(toggleBtn);
+    }
+
+    if (p.addedBy === currentUser.uid || currentWorkspaceRole === "admin") {
+      const delBtn = document.createElement("button");
+      delBtn.className = "danger-btn";
+      delBtn.textContent = "Delete";
+      delBtn.addEventListener("click", () => projectsCol().doc(p.id).delete());
+      actions.appendChild(delBtn);
+    }
+
+    div.appendChild(actions);
+    container.appendChild(div);
+  });
+}
+
+function populateProjectDropdowns() {
+  const addSelect = $("rfiProjectInput");
+  const filterSelect = $("rfiFilterProject");
+  if (addSelect) {
+    const current = addSelect.value;
+    addSelect.innerHTML = allProjects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+    if (current && allProjects.some(p => p.id === current)) addSelect.value = current;
+  }
+  if (filterSelect) {
+    const current = filterSelect.value;
+    filterSelect.innerHTML = `<option value="">All Projects</option>` +
+      allProjects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+    filterSelect.value = current || "";
+  }
+}
+
+$("addProjectBtn").addEventListener("click", async () => {
+  $("projectError").textContent = "";
+  const name = $("newProjectNameInput").value.trim();
+  const startDate = $("newProjectStartDateInput").value || todayStr();
+  if (!name) { $("projectError").textContent = "Project name is required."; return; }
+  try {
+    await projectsCol().add({
+      name, startDate, status: "Ongoing", completedDate: null,
+      addedBy: currentUser.uid, addedByName: currentUserDoc.name, createdAt: nowTs()
+    });
+    $("newProjectNameInput").value = ""; $("newProjectStartDateInput").value = "";
+  } catch (err) {
+    $("projectError").textContent = err.message;
+  }
+});
+
+function rfiStatusClass(status) {
+  if (status === "Closed") return "rfi-status-closed";
+  if (status === "Partially Closed") return "rfi-status-partial";
+  if (status === "Void") return "rfi-status-void";
+  return "rfi-status-open";
+}
+
+function fmtRfiDate(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function listenRfiEntries() {
+  const unsub = rfiCol().orderBy("createdAt", "desc").onSnapshot(snap => {
+    allRfiEntries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderRfiLog();
+    renderRfiDashboard();
+  });
+  unsubscribers.push(unsub);
+}
+
+function renderRfiLog() {
+  const container = $("rfiLogContainer");
+  if (!container) return;
+  const filtered = rfiFilterProjectId ? allRfiEntries.filter(r => r.projectId === rfiFilterProjectId) : allRfiEntries;
+  container.innerHTML = "";
+  if (!filtered.length) { container.innerHTML = emptyState("No entries yet."); return; }
+  filtered.forEach(r => {
+    const div = document.createElement("div");
+    div.className = "rfi-entry";
+    div.innerHTML = `
+      <div class="rfi-entry-top">
+        <div class="rfi-entry-title">${escapeHtml(r.refNo || "—")} · ${escapeHtml(r.type || "")} — ${escapeHtml(r.subject || "")}</div>
+        <span class="rfi-status-pill ${rfiStatusClass(r.status)}">${escapeHtml(r.status || "Open")}</span>
+      </div>
+      <div class="rfi-entry-meta">
+        ${escapeHtml(r.projectName || "—")} · Sent to ${escapeHtml(r.sentTo || "—")} · Sent ${fmtRfiDate(r.dateSent)}${r.dueDate ? " · Due " + fmtRfiDate(r.dueDate) : ""}${r.dateReceived ? " · Received " + fmtRfiDate(r.dateReceived) : ""}
+        ${r.responseSummary ? "<br>" + escapeHtml(r.responseSummary) : ""}
+        ${r.notes ? "<br>Notes: " + escapeHtml(r.notes) : ""}
+      </div>`;
+    const delBtn = document.createElement("button");
+    delBtn.className = "danger-btn";
+    delBtn.textContent = "Delete";
+    delBtn.style.marginTop = "8px";
+    delBtn.addEventListener("click", () => rfiCol().doc(r.id).delete());
+    div.appendChild(delBtn);
+    container.appendChild(div);
+  });
+}
+
+$("rfiFilterProject").addEventListener("change", (e) => {
+  rfiFilterProjectId = e.target.value;
+  renderRfiLog();
+});
+
+function renderRfiDashboard() {
+  const container = $("rfiDashboardContainer");
+  if (!container) return;
+  if (!allProjects.length) { container.innerHTML = emptyState("No projects yet."); return; }
+  // Open bucket = Open + Partially Closed. Closed bucket = Closed + Void.
+  const rows = allProjects.map(p => {
+    const entries = allRfiEntries.filter(r => r.projectId === p.id);
+    const open = entries.filter(r => r.status === "Open" || r.status === "Partially Closed" || !r.status).length;
+    const closed = entries.filter(r => r.status === "Closed" || r.status === "Void").length;
+    return { name: p.name, open, closed, total: entries.length };
+  });
+  const totalOpen = rows.reduce((s, r) => s + r.open, 0);
+  const totalClosed = rows.reduce((s, r) => s + r.closed, 0);
+  const totalAll = rows.reduce((s, r) => s + r.total, 0);
+  container.innerHTML = `
+    <table class="rfi-dashboard-table">
+      <thead><tr><th>Project</th><th>Open</th><th>Closed</th><th>Total</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${r.open}</td><td>${r.closed}</td><td>${r.total}</td></tr>`).join("")}
+        <tr style="font-weight:700;"><td>Total</td><td>${totalOpen}</td><td>${totalClosed}</td><td>${totalAll}</td></tr>
+      </tbody>
+    </table>`;
+}
+
+$("addRfiBtn").addEventListener("click", async () => {
+  $("rfiError").textContent = "";
+  const projectId = $("rfiProjectInput").value;
+  const project = allProjects.find(p => p.id === projectId);
+  const type = $("rfiTypeInput").value;
+  const refNo = $("rfiRefNoInput").value.trim();
+  const subject = $("rfiSubjectInput").value.trim();
+  const sentTo = $("rfiSentToInput").value.trim();
+  const dateSent = $("rfiDateSentInput").value;
+  const dueDate = $("rfiDueDateInput").value;
+  const status = $("rfiStatusInput").value;
+  const dateReceived = $("rfiDateReceivedInput").value;
+  const responseSummary = $("rfiResponseInput").value.trim();
+  const notes = $("rfiNotesInput").value.trim();
+
+  if (!project || !refNo || !subject) {
+    $("rfiError").textContent = "Project, Ref No., and Subject are required.";
+    return;
+  }
+  try {
+    await rfiCol().add({
+      projectId, projectName: project.name, type, refNo, subject, sentTo,
+      dateSent, dueDate, status, dateReceived, responseSummary, notes,
+      addedBy: currentUser.uid, addedByName: currentUserDoc.name, createdAt: nowTs()
+    });
+    $("rfiRefNoInput").value = ""; $("rfiSubjectInput").value = ""; $("rfiSentToInput").value = "";
+    $("rfiDateSentInput").value = ""; $("rfiDueDateInput").value = ""; $("rfiDateReceivedInput").value = "";
+    $("rfiResponseInput").value = ""; $("rfiNotesInput").value = "";
+    $("rfiStatusInput").value = "Open";
+  } catch (err) {
+    $("rfiError").textContent = err.message;
+  }
+});
+
+function setFormulaCell(ws, addr, formula) {
+  ws[addr] = { t: "n", f: formula };
+}
+
+$("exportRfiBtn").addEventListener("click", () => {
+  const wb = XLSX.utils.book_new();
+
+  // ---- Projects sheet ----
+  const projRows = [
+    ["PROJECTS"],
+    ["Add one project name per row below. These names populate the Project dropdown on the RFI Log sheet."],
+    [],
+    ["Project Name", "Start Date", "Status", "Completed Date", "Notes"],
+    ...allProjects.map(p => [p.name, p.startDate || "", p.status || "Ongoing", p.completedDate || "", ""])
+  ];
+  const projSheet = XLSX.utils.aoa_to_sheet(projRows);
+  XLSX.utils.book_append_sheet(wb, projSheet, "Projects");
+
+  // ---- RFI Log sheet ---- (data starts at row 5, column A=Project ... H=Status)
+  const logHeader = ["Project", "Type", "Ref No.", "Subject", "Sent To", "Date Sent", "Due Date", "Status", "Date Received", "Response Summary", "Notes"];
+  const logRows = [
+    ["Team RFI / CLARIFICATION LOG"],
+    ["TRACKING REGISTER"],
+    [],
+    logHeader,
+    ...allRfiEntries.map(r => [
+      r.projectName || "", r.type || "", r.refNo || "", r.subject || "", r.sentTo || "",
+      r.dateSent || "", r.dueDate || "", r.status || "Open", r.dateReceived || "", r.responseSummary || "", r.notes || ""
+    ])
+  ];
+  const logSheet = XLSX.utils.aoa_to_sheet(logRows);
+  XLSX.utils.book_append_sheet(wb, logSheet, "RFI Log");
+
+  // ---- Dashboard sheet ---- (COUNTIFS formulas against a generous fixed range so it
+  // keeps working if rows are added to RFI Log later — never hardcoded numbers)
+  const RANGE = "$5:$1004";
+  const dashRows = [
+    ["DASHBOARD"],
+    ["Live counts per project, pulled automatically from the RFI Log sheet."],
+    [],
+    ["Project", "Open", "Closed", "Total"],
+    ...allProjects.map(p => [p.name, 0, 0, 0]),
+    ["Total", 0, 0, 0]
+  ];
+  const dashSheet = XLSX.utils.aoa_to_sheet(dashRows);
+  const firstRow = 5;
+  allProjects.forEach((p, i) => {
+    const row = firstRow + i;
+    setFormulaCell(dashSheet, `B${row}`,
+      `COUNTIFS('RFI Log'!$A${RANGE},A${row},'RFI Log'!$H${RANGE},"Open")+COUNTIFS('RFI Log'!$A${RANGE},A${row},'RFI Log'!$H${RANGE},"Partially Closed")`);
+    setFormulaCell(dashSheet, `C${row}`,
+      `COUNTIFS('RFI Log'!$A${RANGE},A${row},'RFI Log'!$H${RANGE},"Closed")+COUNTIFS('RFI Log'!$A${RANGE},A${row},'RFI Log'!$H${RANGE},"Void")`);
+    setFormulaCell(dashSheet, `D${row}`, `COUNTIF('RFI Log'!$A${RANGE},A${row})`);
+  });
+  const totalRow = firstRow + allProjects.length;
+  if (allProjects.length) {
+    setFormulaCell(dashSheet, `B${totalRow}`, `SUM(B${firstRow}:B${totalRow - 1})`);
+    setFormulaCell(dashSheet, `C${totalRow}`, `SUM(C${firstRow}:C${totalRow - 1})`);
+    setFormulaCell(dashSheet, `D${totalRow}`, `SUM(D${firstRow}:D${totalRow - 1})`);
+  }
+  XLSX.utils.book_append_sheet(wb, dashSheet, "Dashboard");
+
+  XLSX.writeFile(wb, `rfi-log-${todayStr()}.xlsx`);
 });
 
 // ---------- Chat ----------
