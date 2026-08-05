@@ -118,6 +118,9 @@
       <button class="nav-item" data-view="allowance">
         <span>Allowance</span>
       </button>
+      <button class="nav-item" data-view="rfi">
+        <span>RFI Log</span>
+      </button>
       <button class="nav-item hidden" data-view="members" id="navMembers">
         <span>Manage Members</span>
       </button>
@@ -242,6 +245,12 @@
               <input type="date" id="cfDateInput">
             </div>
             <div class="field">
+              <label>Project Name</label>
+              <input type="text" id="cfProjectInput" placeholder="e.g. Ave South">
+            </div>
+          </div>
+          <div class="field-row" style="margin-top:10px;">
+            <div class="field">
               <label>Login Time</label>
               <input type="time" id="cfLoginInput">
             </div>
@@ -268,13 +277,35 @@
           </div>
           <div class="field-row" style="margin-top:10px;">
             <div class="field">
-              <label>Project</label>
-              <input type="text" id="wkProjectInput" placeholder="e.g. Riverside Tower">
+              <label>Project ID</label>
+              <input type="text" id="wkProjectIdInput" placeholder="e.g. 2512">
+            </div>
+            <div class="field">
+              <label>Client Name</label>
+              <input type="text" id="wkClientInput" placeholder="e.g. Gridiron Steels">
+            </div>
+          </div>
+          <div class="field-row" style="margin-top:10px;">
+            <div class="field">
+              <label>Project Name</label>
+              <input type="text" id="wkProjectInput" placeholder="e.g. Hillsdale ES">
+            </div>
+            <div class="field">
+              <label>Project Status</label>
+              <select id="wkStatusInput">
+                <option>Running Project/Upload</option>
+                <option>Completed</option>
+                <option>On Hold</option>
+              </select>
             </div>
           </div>
           <div class="field" style="margin-top:10px;">
-            <label>Work Description</label>
-            <textarea id="wkDescInput" rows="2" placeholder="What did you work on?"></textarea>
+            <label>Work Planned</label>
+            <textarea id="wkDescInput" rows="2" placeholder="e.g. Modeling & drafting"></textarea>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label>Remarks</label>
+            <textarea id="wkRemarksInput" rows="2" placeholder="Optional"></textarea>
           </div>
         </div>
 
@@ -303,6 +334,108 @@
           </div>
           <div id="teamWeekendList"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- RFI LOG VIEW -->
+    <div class="view hidden" id="view-rfi">
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>Projects</h3>
+        <div class="field-row" style="margin-top:10px;align-items:flex-end;">
+          <div class="field">
+            <label>Project Name</label>
+            <input type="text" id="newProjectNameInput" placeholder="e.g. Avenue South Building-D">
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" id="newProjectStartDateInput">
+          </div>
+          <button class="btn-primary" id="addProjectBtn">Add Project</button>
+        </div>
+        <div class="auth-error" id="projectError"></div>
+        <div id="projectsListContainer" style="margin-top:14px;"></div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>Add RFI / Clarification Entry</h3>
+        <div class="field-row" style="margin-top:10px;">
+          <div class="field">
+            <label>Project</label>
+            <select id="rfiProjectInput"></select>
+          </div>
+          <div class="field">
+            <label>Type</label>
+            <select id="rfiTypeInput">
+              <option>RFI</option>
+              <option>Clarification</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ref No.</label>
+            <input type="text" id="rfiRefNoInput" placeholder="e.g. RFI#001">
+          </div>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label>Subject</label>
+          <input type="text" id="rfiSubjectInput" placeholder="e.g. Anchor bolt query">
+        </div>
+        <div class="field-row" style="margin-top:10px;">
+          <div class="field">
+            <label>Sent To</label>
+            <input type="text" id="rfiSentToInput" placeholder="e.g. Fab / GC / Mechanical">
+          </div>
+          <div class="field">
+            <label>Date Sent</label>
+            <input type="date" id="rfiDateSentInput">
+          </div>
+          <div class="field">
+            <label>Due Date</label>
+            <input type="date" id="rfiDueDateInput">
+          </div>
+        </div>
+        <div class="field-row" style="margin-top:10px;">
+          <div class="field">
+            <label>Status</label>
+            <select id="rfiStatusInput">
+              <option>Open</option>
+              <option>Closed</option>
+              <option>Partially Closed</option>
+              <option>Void</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Date Received</label>
+            <input type="date" id="rfiDateReceivedInput">
+          </div>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label>Response Summary</label>
+          <textarea id="rfiResponseInput" rows="2" placeholder="Optional"></textarea>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label>Notes</label>
+          <textarea id="rfiNotesInput" rows="2" placeholder="Optional"></textarea>
+        </div>
+        <div class="auth-error" id="rfiError"></div>
+        <button class="btn-primary" id="addRfiBtn" style="margin-top:12px;">Add Entry</button>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <h3>Log</h3>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="rfiFilterProject" style="min-width:180px;">
+              <option value="">All Projects</option>
+            </select>
+            <button class="btn-secondary" id="exportRfiBtn">Export Excel</button>
+          </div>
+        </div>
+        <div id="rfiLogContainer" style="margin-top:14px;"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Dashboard</h3>
+        <div id="rfiDashboardContainer"></div>
       </div>
     </div>
 
@@ -361,6 +494,28 @@
             <button data-account-choice="member" id="acctEngineerBtn">Engineer</button>
           </div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <h4>Employee details</h4>
+            <p>Used on Allowance and Weekend Working exports</p>
+          </div>
+        </div>
+        <div class="field-row" style="margin:0 0 6px;">
+          <div class="field">
+            <label>EMP ID</label>
+            <input type="text" id="empIdInput" placeholder="e.g. NX1038">
+          </div>
+          <div class="field">
+            <label>Department</label>
+            <input type="text" id="empDeptInput" placeholder="e.g. SDS-2">
+          </div>
+          <div class="field">
+            <label>Location</label>
+            <input type="text" id="empLocationInput" placeholder="e.g. Coimbatore">
+          </div>
+          <button class="btn-secondary" id="saveEmpDetailsBtn" style="align-self:flex-end;">Save</button>
+        </div>
+        <div class="auth-error" id="empDetailsError"></div>
         <div class="settings-row">
           <div class="settings-row-info">
             <h4>On leave today</h4>
@@ -484,6 +639,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="app.js"></script>
 </body>
