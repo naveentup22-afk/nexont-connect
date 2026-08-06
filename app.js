@@ -29,7 +29,7 @@ function fmtDate(ts) {
 }
 
 function isOverdue(task) {
-  if (!task.deadline || task.status === "Done") return false;
+  if (!task.deadline || task.status === "Completed") return false;
   const d = task.deadline.toDate ? task.deadline.toDate() : new Date(task.deadline);
   return d.getTime() < Date.now();
 }
@@ -38,9 +38,9 @@ function statusClass(status) {
   return {
     "To Do": "status-todo",
     "In Progress": "status-progress",
-    "Pending Handover": "status-handover",
-    "At Risk": "status-risk",
-    "Done": "status-done"
+    "Handed Over": "status-handover",
+    "Partially Completed": "status-partial",
+    "Completed": "status-done"
   }[status] || "status-todo";
 }
 
@@ -363,7 +363,7 @@ function listenTasks() {
 
 function renderTaskCard(task) {
   const div = document.createElement("div");
-  div.className = `task-card shift-${task.shift}` + (isOverdue(task) ? " overdue" : "");
+  div.className = "task-card" + (isOverdue(task) ? " overdue" : "");
   const assignee = membersCache[task.assignedTo]?.name || "Unassigned";
   div.innerHTML = `
     <div class="task-top">
@@ -373,7 +373,6 @@ function renderTaskCard(task) {
     <div class="task-meta">
       <span>👤 ${escapeHtml(assignee)}</span>
       <span>🕐 ${fmtDate(task.deadline)}</span>
-      <span>Shift ${task.shift}</span>
       ${isOverdue(task) ? '<span style="color:var(--danger);font-weight:700;">Overdue</span>' : ""}
     </div>`;
   div.addEventListener("click", () => openTaskModal(task));
@@ -386,7 +385,7 @@ function renderTodayTasks() {
   const list = allTasks.filter(t => {
     if (!t.deadline) return false;
     const d = t.deadline.toDate ? t.deadline.toDate() : new Date(t.deadline);
-    return (d >= today && d < tomorrow) || (isOverdue(t)) || t.status === "Pending Handover";
+    return (d >= today && d < tomorrow) || (isOverdue(t)) || t.status === "Handed Over";
   });
   const container = $("todayTaskList");
   container.innerHTML = "";
@@ -438,6 +437,18 @@ function populateAssigneeDropdown() {
   });
 }
 
+function populateHandoverDropdown(excludeUid) {
+  const sel = $("handoverToInput");
+  sel.innerHTML = "";
+  Object.entries(membersCache).forEach(([uid, m]) => {
+    if (uid === excludeUid) return;
+    const opt = document.createElement("option");
+    opt.value = uid;
+    opt.textContent = m.name;
+    sel.appendChild(opt);
+  });
+}
+
 // ---------- Task modal (create / edit / comments) ----------
 let editingTaskId = null;
 
@@ -447,14 +458,22 @@ function openTaskModal(task) {
   $("taskModalError").textContent = "";
   $("taskTitleInput").value = task?.title || "";
   $("taskDescInput").value = task?.description || "";
-  $("taskShiftInput").value = task?.shift || "A";
   $("taskAssigneeInput").value = task?.assignedTo || currentUser.uid;
-  $("taskStatusInput").value = task?.status || "To Do";
   $("taskDeadlineInput").value = task?.deadline
     ? new Date(task.deadline.toDate ? task.deadline.toDate() : task.deadline).toISOString().slice(0, 16)
     : "";
   $("commentsSection").classList.toggle("hidden", !task);
   $("deleteTaskBtn").classList.toggle("hidden", !task);
+
+  const canUpdateStatus = task && (task.assignedTo === currentUser.uid || currentWorkspaceRole === "admin");
+  $("statusActionsSection").classList.toggle("hidden", !canUpdateStatus);
+  if (canUpdateStatus) {
+    const pill = $("modalStatusPill");
+    pill.textContent = task.status;
+    pill.className = "status-pill " + statusClass(task.status);
+    populateHandoverDropdown(task.assignedTo);
+  }
+
   if (task) loadComments(task.id);
   $("taskModal").classList.remove("hidden");
 }
@@ -470,10 +489,8 @@ $("saveTaskBtn").addEventListener("click", async () => {
   const data = {
     title,
     description: $("taskDescInput").value.trim(),
-    shift: $("taskShiftInput").value,
     assignedTo,
     assignedToName: membersCache[assignedTo]?.name || "",
-    status: $("taskStatusInput").value,
     deadline: deadlineVal ? firebase.firestore.Timestamp.fromDate(new Date(deadlineVal)) : null,
     updatedAt: nowTs()
   };
@@ -482,6 +499,7 @@ $("saveTaskBtn").addEventListener("click", async () => {
     if (editingTaskId) {
       await tasksCol().doc(editingTaskId).update(data);
     } else {
+      data.status = "To Do";
       data.createdAt = nowTs();
       data.createdBy = currentUser.uid;
       const ref = await tasksCol().add(data);
@@ -502,35 +520,90 @@ $("deleteTaskBtn").addEventListener("click", async () => {
   $("taskModal").classList.add("hidden");
 });
 
+function dateHeaderLabel(ts) {
+  const d = ts?.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
 function loadComments(taskId) {
   const list = $("commentList");
   list.innerHTML = "";
   const unsub = tasksCol().doc(taskId).collection("comments").orderBy("createdAt", "asc")
     .onSnapshot(snap => {
       list.innerHTML = "";
+      let lastDateKey = null;
       snap.forEach(d => {
         const c = d.data();
-        const item = document.createElement("div");
-        item.className = "comment-item";
-        item.innerHTML = `<div class="comment-head"><span class="comment-author">${escapeHtml(c.authorName)}</span><span class="comment-time">${fmtDate(c.createdAt)}</span></div><div class="comment-text">${escapeHtml(c.text)}</div>`;
-        list.appendChild(item);
+        const dateKey = dateHeaderLabel(c.createdAt);
+        if (dateKey !== lastDateKey) {
+          const header = document.createElement("div");
+          header.className = "log-date-header";
+          header.textContent = dateKey;
+          list.appendChild(header);
+          lastDateKey = dateKey;
+        }
+        if (c.type === "log") {
+          const item = document.createElement("div");
+          item.className = "log-entry";
+          item.textContent = `${c.text} · ${fmtDate(c.createdAt)}`;
+          list.appendChild(item);
+        } else {
+          const item = document.createElement("div");
+          item.className = "comment-item";
+          item.innerHTML = `<div class="comment-head"><span class="comment-author">${escapeHtml(c.authorName)}</span><span class="comment-time">${fmtDate(c.createdAt)}</span></div><div class="comment-text">${escapeHtml(c.text)}</div>`;
+          list.appendChild(item);
+        }
       });
       list.scrollTop = list.scrollHeight;
     });
   unsubscribers.push(unsub);
 }
 
+async function addLogEntry(taskId, text, type) {
+  await tasksCol().doc(taskId).collection("comments").add({
+    text, type, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
+  });
+}
+
 $("addCommentBtn").addEventListener("click", async () => {
   const text = $("newCommentInput").value.trim();
   if (!text || !editingTaskId) return;
-  await tasksCol().doc(editingTaskId).collection("comments").add({
-    text, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
-  });
+  await addLogEntry(editingTaskId, text, "comment");
   const task = allTasks.find(t => t.id === editingTaskId);
   if (task && task.assignedTo !== currentUser.uid) {
     await pushNotification(task.assignedTo, "comment", `${currentUserDoc.name} commented on "${task.title}"`, editingTaskId);
   }
   $("newCommentInput").value = "";
+});
+
+// ---------- Status update actions ----------
+async function updateTaskStatus(newStatus, logText) {
+  if (!editingTaskId) return;
+  await tasksCol().doc(editingTaskId).update({ status: newStatus, updatedAt: nowTs() });
+  await addLogEntry(editingTaskId, logText, "log");
+  $("taskModal").classList.add("hidden");
+}
+
+$("markCompletedBtn").addEventListener("click", () => {
+  updateTaskStatus("Completed", `${currentUserDoc.name} marked this task Completed`);
+});
+
+$("markPartialBtn").addEventListener("click", () => {
+  updateTaskStatus("Partially Completed", `${currentUserDoc.name} marked this task Partially Completed`);
+});
+
+$("handoverBtn").addEventListener("click", async () => {
+  if (!editingTaskId) return;
+  const newUid = $("handoverToInput").value;
+  if (!newUid) { $("taskModalError").textContent = "Choose who to hand this task over to."; return; }
+  const newName = membersCache[newUid]?.name || "";
+  const task = allTasks.find(t => t.id === editingTaskId);
+  await tasksCol().doc(editingTaskId).update({
+    assignedTo: newUid, assignedToName: newName, status: "Handed Over", updatedAt: nowTs()
+  });
+  await addLogEntry(editingTaskId, `${currentUserDoc.name} handed this task over to ${newName}`, "log");
+  await pushNotification(newUid, "assigned", `${currentUserDoc.name} handed over a task to you: "${task?.title || ""}"`, editingTaskId);
+  $("taskModal").classList.add("hidden");
 });
 
 // ---------- On Leave Today ----------
@@ -1417,19 +1490,19 @@ async function sendMessage() {
 function renderDashboard() {
   const total = allTasks.length;
   const overdue = allTasks.filter(isOverdue).length;
-  const pending = allTasks.filter(t => t.status === "Pending Handover").length;
-  const done = allTasks.filter(t => t.status === "Done").length;
+  const pending = allTasks.filter(t => t.status === "Handed Over").length;
+  const done = allTasks.filter(t => t.status === "Completed").length;
 
   $("statGrid").innerHTML = `
     <div class="stat-card"><div class="num">${total}</div><div class="label">Total Tasks</div></div>
     <div class="stat-card danger"><div class="num">${overdue}</div><div class="label">Overdue</div></div>
-    <div class="stat-card warning"><div class="num">${pending}</div><div class="label">Pending Handover</div></div>
+    <div class="stat-card warning"><div class="num">${pending}</div><div class="label">Handed Over</div></div>
     <div class="stat-card success"><div class="num">${done}</div><div class="label">Completed</div></div>
   `;
 
   const counts = {};
   Object.keys(membersCache).forEach(uid => counts[uid] = 0);
-  allTasks.forEach(t => { if (t.status !== "Done" && t.assignedTo) counts[t.assignedTo] = (counts[t.assignedTo] || 0) + 1; });
+  allTasks.forEach(t => { if (t.status !== "Completed" && t.assignedTo) counts[t.assignedTo] = (counts[t.assignedTo] || 0) + 1; });
   const max = Math.max(1, ...Object.values(counts));
 
   const container = $("memberBreakdown");
