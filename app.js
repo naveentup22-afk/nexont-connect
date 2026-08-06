@@ -10,7 +10,6 @@ let currentUserDoc = null;    // Firestore users/{uid}
 let currentWorkspaceId = null;
 let currentWorkspaceRole = "member";
 let membersCache = {};        // uid -> {name,email}
-let activeChannelId = "general";
 let unsubscribers = [];       // active Firestore listeners to detach on workspace switch
 
 // ---------- Helpers ----------
@@ -302,9 +301,12 @@ async function enterWorkspace() {
   listenTasks();
   readState = {};
   unreadCounts = {};
-  watchedChannels = new Set();
+  watchedConvs = new Set();
+  activeConv = { type: "channel", id: "general", title: "#general" };
   listenReadState();
   listenChannels();
+  listenDms();
+  switchConversation("channel", "general", "#general");
   listenNotifications();
   listenSchedules();
   listenLeave();
@@ -340,7 +342,7 @@ function switchView(view) {
   $("viewTitle").textContent = titles[view];
   $("fabAddTask").classList.toggle("hidden", !["today", "tasks"].includes(view));
   if (view === "dashboard") renderDashboard();
-  if (view === "chat") markChannelRead(activeChannelId);
+  if (view === "chat") markConvRead(activeConv.type, activeConv.id);
 }
 
 // ---------- Tasks ----------
@@ -1291,43 +1293,55 @@ $("exportRfiBtn").addEventListener("click", () => {
 });
 
 // ---------- Chat ----------
-let readState = {};       // channelId -> millis of last read
-let unreadCounts = {};    // channelId -> unread count
-let watchedChannels = new Set();
+let activeConv = { type: "channel", id: "general", title: "#general" };
+let readState = {};       // convKey -> millis of last read
+let unreadCounts = {};    // convKey -> unread count
+let watchedConvs = new Set();
+
+function convKey(type, id) { return `${type}:${id}`; }
+
+function convDocRef() {
+  const base = db.collection("workspaces").doc(currentWorkspaceId);
+  return activeConv.type === "dm"
+    ? base.collection("dms").doc(activeConv.id)
+    : base.collection("channels").doc(activeConv.id);
+}
+function msgCol() { return convDocRef().collection("messages"); }
 
 function readStateRef() {
   return db.collection("workspaces").doc(currentWorkspaceId).collection("readState").doc(currentUser.uid);
 }
 
-function markChannelRead(channelId) {
-  readStateRef().set({ [channelId]: nowTs() }, { merge: true }).catch(() => {});
-  readState[channelId] = Date.now();
-  unreadCounts[channelId] = 0;
+function markConvRead(type, id) {
+  const key = convKey(type, id);
+  readStateRef().set({ [key]: nowTs() }, { merge: true }).catch(() => {});
+  readState[key] = Date.now();
+  unreadCounts[key] = 0;
   recomputeChatBadge();
 }
 
 function listenReadState() {
   const unsub = readStateRef().onSnapshot(snap => {
     const data = snap.data() || {};
-    Object.entries(data).forEach(([ch, ts]) => { readState[ch] = ts?.toMillis?.() || 0; });
+    Object.entries(data).forEach(([k, ts]) => { readState[k] = ts?.toMillis?.() || 0; });
   }, () => {});
   unsubscribers.push(unsub);
 }
 
-function watchChannelUnread(channelId) {
-  if (watchedChannels.has(channelId)) return;
-  watchedChannels.add(channelId);
-  const unsub = db.collection("workspaces").doc(currentWorkspaceId).collection("channels").doc(channelId)
-    .collection("messages").orderBy("createdAt", "desc").limit(30)
+function watchConvUnread(type, id, docRef) {
+  const key = convKey(type, id);
+  if (watchedConvs.has(key)) return;
+  watchedConvs.add(key);
+  const unsub = docRef.collection("messages").orderBy("createdAt", "desc").limit(30)
     .onSnapshot(snap => {
-      const lastRead = readState[channelId] || 0;
+      const lastRead = readState[key] || 0;
       let count = 0;
       snap.forEach(d => {
         const m = d.data();
         const ts = m.createdAt?.toMillis?.() || 0;
-        if (m.authorUid !== currentUser.uid && ts > lastRead) count++;
+        if (m.authorUid !== currentUser.uid && ts > lastRead && !(m.hiddenFor || []).includes(currentUser.uid)) count++;
       });
-      unreadCounts[channelId] = count;
+      unreadCounts[key] = count;
       recomputeChatBadge();
     }, () => {});
   unsubscribers.push(unsub);
@@ -1341,32 +1355,236 @@ function recomputeChatBadge() {
   badge.classList.toggle("hidden", total === 0);
 }
 
+function switchConversation(type, id, title) {
+  activeConv = { type, id, title };
+  $("chatConvTitle").textContent = title;
+  document.querySelectorAll(".channel-item").forEach(el => el.classList.toggle("active", el.dataset.key === convKey(type, id)));
+  clearReplyPreview();
+  listenPinned();
+  listenTyping();
+  listenMessages();
+  markConvRead(type, id);
+}
+
 function listenChannels() {
   const unsub = db.collection("workspaces").doc(currentWorkspaceId).collection("channels")
     .onSnapshot(snap => {
-      const list = $("channelList");
-      list.querySelectorAll(".channel-item").forEach(el => el.remove());
+      const container = $("channelItemsContainer");
+      container.innerHTML = "";
       snap.forEach(doc => {
-        watchChannelUnread(doc.id);
+        watchConvUnread("channel", doc.id, doc.ref);
         const item = document.createElement("div");
-        item.className = "channel-item" + (doc.id === activeChannelId ? " active" : "");
+        item.className = "channel-item" + (activeConv.type === "channel" && doc.id === activeConv.id ? " active" : "");
+        item.dataset.key = convKey("channel", doc.id);
         item.textContent = "# " + doc.data().name;
-        item.addEventListener("click", () => {
-          activeChannelId = doc.id;
-          list.querySelectorAll(".channel-item").forEach(el => el.classList.remove("active"));
-          item.classList.add("active");
-          listenMessages();
-          markChannelRead(activeChannelId);
-        });
-        list.appendChild(item);
+        item.addEventListener("click", () => switchConversation("channel", doc.id, "#" + doc.data().name));
+        container.appendChild(item);
       });
-      listenMessages();
+      if (activeConv.type === "channel") listenMessages();
     });
   unsubscribers.push(unsub);
 }
 
-function msgCol() {
-  return db.collection("workspaces").doc(currentWorkspaceId).collection("channels").doc(activeChannelId).collection("messages");
+$("newChannelBtn").addEventListener("click", async () => {
+  const name = prompt("New channel name (e.g. site-updates):");
+  if (!name || !name.trim()) return;
+  const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!id) return;
+  await db.collection("workspaces").doc(currentWorkspaceId).collection("channels").doc(id).set({
+    name: name.trim(), createdBy: currentUser.uid, createdAt: nowTs()
+  });
+});
+
+function dmId(uidA, uidB) { return [uidA, uidB].sort().join("_"); }
+
+function listenDms() {
+  const unsub = db.collection("workspaces").doc(currentWorkspaceId).collection("dms")
+    .where("participantUids", "array-contains", currentUser.uid)
+    .onSnapshot(snap => {
+      const container = $("dmItemsContainer");
+      container.innerHTML = "";
+      snap.forEach(doc => {
+        const d = doc.data();
+        const otherUid = d.participantUids.find(u => u !== currentUser.uid);
+        const otherName = d.participantNames?.[otherUid] || "Member";
+        watchConvUnread("dm", doc.id, doc.ref);
+        const item = document.createElement("div");
+        item.className = "channel-item" + (activeConv.type === "dm" && doc.id === activeConv.id ? " active" : "");
+        item.dataset.key = convKey("dm", doc.id);
+        item.textContent = "🗨 " + otherName;
+        item.addEventListener("click", () => switchConversation("dm", doc.id, otherName));
+        container.appendChild(item);
+      });
+      if (activeConv.type === "dm") listenMessages();
+    }, () => {});
+  unsubscribers.push(unsub);
+}
+
+$("newDmBtn").addEventListener("click", () => {
+  const panel = $("dmPickerPanel");
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) {
+    const sel = $("dmMemberSelect");
+    sel.innerHTML = "";
+    Object.entries(membersCache).forEach(([uid, m]) => {
+      if (uid === currentUser.uid) return;
+      const opt = document.createElement("option");
+      opt.value = uid; opt.textContent = m.name;
+      sel.appendChild(opt);
+    });
+  }
+});
+
+$("startDmBtn").addEventListener("click", async () => {
+  const otherUid = $("dmMemberSelect").value;
+  if (!otherUid) return;
+  const id = dmId(currentUser.uid, otherUid);
+  const ref = db.collection("workspaces").doc(currentWorkspaceId).collection("dms").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    await ref.set({
+      participantUids: [currentUser.uid, otherUid],
+      participantNames: { [currentUser.uid]: currentUserDoc.name, [otherUid]: membersCache[otherUid]?.name || "" },
+      createdAt: nowTs()
+    });
+  }
+  $("dmPickerPanel").classList.add("hidden");
+  switchConversation("dm", id, membersCache[otherUid]?.name || "Direct Message");
+});
+
+// ---------- Pinned message ----------
+function listenPinned() {
+  const unsub = convDocRef().onSnapshot(snap => {
+    const d = snap.data() || {};
+    const bar = $("chatPinnedBar");
+    if (!d.pinnedMessageId) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+    bar.classList.remove("hidden");
+    bar.innerHTML = `<div class="pin-body">📌 <b>${escapeHtml(d.pinnedAuthor || "")}</b>: ${escapeHtml((d.pinnedText || "").slice(0, 100))}</div><button id="unpinBtn">Unpin</button>`;
+    $("unpinBtn").addEventListener("click", () => {
+      convDocRef().update({ pinnedMessageId: firebase.firestore.FieldValue.delete(), pinnedText: firebase.firestore.FieldValue.delete(), pinnedAuthor: firebase.firestore.FieldValue.delete() });
+    });
+  }, () => {});
+  unsubscribers.push(unsub);
+}
+
+function togglePin(msgId, text, author) {
+  convDocRef().get().then(snap => {
+    const current = snap.data() || {};
+    if (current.pinnedMessageId === msgId) {
+      convDocRef().update({ pinnedMessageId: firebase.firestore.FieldValue.delete(), pinnedText: firebase.firestore.FieldValue.delete(), pinnedAuthor: firebase.firestore.FieldValue.delete() });
+    } else {
+      convDocRef().update({ pinnedMessageId: msgId, pinnedText: text, pinnedAuthor: author });
+    }
+  });
+}
+
+// ---------- Typing indicator ----------
+let typingTimeout = null;
+function typingCol() { return convDocRef().collection("typing"); }
+
+function listenTyping() {
+  const unsub = typingCol().onSnapshot(snap => {
+    const now = Date.now();
+    const names = [];
+    snap.forEach(d => {
+      if (d.id === currentUser.uid) return;
+      const data = d.data();
+      const at = data.at?.toMillis?.() || 0;
+      if (now - at < 6000) names.push(data.name);
+    });
+    const el = $("typingIndicator");
+    if (!names.length) { el.classList.add("hidden"); el.textContent = ""; return; }
+    el.classList.remove("hidden");
+    el.textContent = names.length === 1 ? `${names[0]} is typing...` : `${names.join(", ")} are typing...`;
+  }, () => {});
+  unsubscribers.push(unsub);
+}
+
+function signalTyping() {
+  typingCol().doc(currentUser.uid).set({ name: currentUserDoc.name, at: nowTs() }).catch(() => {});
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    typingCol().doc(currentUser.uid).delete().catch(() => {});
+  }, 4000);
+}
+
+// ---------- Reactions ----------
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "🎉", "👀"];
+
+function toggleReaction(msgId, emoji) {
+  const ref = msgCol().doc(msgId);
+  db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const data = doc.data() || {};
+    const reactions = data.reactions || {};
+    const list = reactions[emoji] || [];
+    if (list.includes(currentUser.uid)) {
+      reactions[emoji] = list.filter(u => u !== currentUser.uid);
+      if (!reactions[emoji].length) delete reactions[emoji];
+    } else {
+      reactions[emoji] = [...list, currentUser.uid];
+    }
+    tx.update(ref, { reactions });
+  }).catch(() => {});
+}
+
+function renderReactions(msgId, reactions) {
+  if (!reactions) return "";
+  const entries = Object.entries(reactions).filter(([, uids]) => uids.length);
+  if (!entries.length) return "";
+  return `<div class="msg-reactions">${entries.map(([emoji, uids]) =>
+    `<span class="reaction-pill${uids.includes(currentUser.uid) ? " mine" : ""}" data-msg="${msgId}" data-emoji="${emoji}">${emoji} ${uids.length}</span>`
+  ).join("")}</div>`;
+}
+
+// ---------- Reply / quote ----------
+let replyingTo = null;
+
+function setReplyPreview(msgId, text, author) {
+  replyingTo = { id: msgId, text, author };
+  const bar = $("replyPreviewBar");
+  bar.classList.remove("hidden");
+  bar.innerHTML = `<div class="reply-body">Replying to <b>${escapeHtml(author)}</b>: ${escapeHtml(text.slice(0, 80))}</div><button id="cancelReplyBtn">✕</button>`;
+  $("cancelReplyBtn").addEventListener("click", clearReplyPreview);
+  $("chatInput").focus();
+}
+
+function clearReplyPreview() {
+  replyingTo = null;
+  $("replyPreviewBar").classList.add("hidden");
+  $("replyPreviewBar").innerHTML = "";
+}
+
+// ---------- Delete ----------
+function deleteForEveryone(msgId) {
+  if (!confirm("Delete this message for everyone?")) return;
+  msgCol().doc(msgId).update({ deleted: true, text: "", deletedAt: nowTs() });
+}
+function deleteForMe(msgId) {
+  msgCol().doc(msgId).update({ hiddenFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
+}
+
+// ---------- Search ----------
+let chatSearchTerm = "";
+$("chatSearchToggleBtn").addEventListener("click", () => {
+  $("chatSearchRow").classList.toggle("hidden");
+  $("chatSearchInput").focus();
+});
+$("chatSearchCloseBtn").addEventListener("click", () => {
+  $("chatSearchRow").classList.add("hidden");
+  $("chatSearchInput").value = "";
+  chatSearchTerm = "";
+  applyMessageSearchFilter();
+});
+$("chatSearchInput").addEventListener("input", (e) => {
+  chatSearchTerm = e.target.value.trim().toLowerCase();
+  applyMessageSearchFilter();
+});
+function applyMessageSearchFilter() {
+  document.querySelectorAll("#chatMessages .msg").forEach(el => {
+    const text = (el.dataset.searchText || "").toLowerCase();
+    el.classList.toggle("hidden", !!chatSearchTerm && !text.includes(chatSearchTerm));
+  });
 }
 
 function listenMessages() {
@@ -1375,25 +1593,66 @@ function listenMessages() {
     container.innerHTML = "";
     snap.forEach(d => {
       const m = d.data();
+      if ((m.hiddenFor || []).includes(currentUser.uid)) return;
       const div = document.createElement("div");
       div.className = "msg";
-      const rendered = escapeHtml(m.text).replace(/@([A-Za-z0-9 ]+?)(?=[\s.,!?]|$)/g, '<span class="mention-tag">@$1</span>');
+      div.dataset.searchText = m.text || "";
       const isMine = m.authorUid === currentUser.uid;
+
+      if (m.deleted) {
+        div.innerHTML = `
+          <div class="avatar">${initials(m.authorName)}</div>
+          <div class="msg-body">
+            <div class="msg-head"><span class="msg-author">${escapeHtml(m.authorName)}</span><span class="msg-time">${fmtDate(m.createdAt)}</span></div>
+            <div class="msg-deleted">This message was deleted</div>
+          </div>`;
+        container.appendChild(div);
+        return;
+      }
+
+      const rendered = escapeHtml(m.text).replace(/@([A-Za-z0-9 ]+?)(?=[\s.,!?]|$)/g, '<span class="mention-tag">@$1</span>');
+      const quote = m.replyToId ? `<div class="msg-quote"><b>${escapeHtml(m.replyToAuthor || "")}</b>: ${escapeHtml((m.replyToText || "").slice(0, 80))}</div>` : "";
       div.innerHTML = `
         <div class="avatar">${initials(m.authorName)}</div>
         <div class="msg-body">
           <div class="msg-head">
             <span class="msg-author">${escapeHtml(m.authorName)}</span>
             <span class="msg-time">${fmtDate(m.createdAt)}${m.edited ? ' · <span class="msg-edited">edited</span>' : ""}</span>
-            ${isMine ? `<button class="msg-edit-btn" data-id="${d.id}">Edit</button>` : ""}
           </div>
+          ${quote}
           <div class="msg-text" id="msgText-${d.id}">${rendered}</div>
+          ${renderReactions(d.id, m.reactions)}
+          <div class="emoji-picker-row hidden" id="emojiPicker-${d.id}">
+            ${REACTION_EMOJIS.map(e => `<button data-emoji="${e}">${e}</button>`).join("")}
+          </div>
+          <div class="msg-actions-row">
+            <button class="msg-react-btn">React</button>
+            <button class="msg-reply-btn">Reply</button>
+            <button class="msg-pin-btn">Pin</button>
+            ${isMine ? `<button class="msg-edit-btn">Edit</button><button class="msg-del-everyone-btn">Delete for everyone</button>` : ""}
+            <button class="msg-del-me-btn">Delete for me</button>
+          </div>
         </div>`;
+
+      div.querySelector(".msg-react-btn").addEventListener("click", () => {
+        $(`emojiPicker-${d.id}`).classList.toggle("hidden");
+      });
+      div.querySelectorAll(`#emojiPicker-${d.id} button`).forEach(btn => {
+        btn.addEventListener("click", () => toggleReaction(d.id, btn.dataset.emoji));
+      });
+      div.querySelectorAll(".reaction-pill").forEach(pill => {
+        pill.addEventListener("click", () => toggleReaction(pill.dataset.msg, pill.dataset.emoji));
+      });
+      div.querySelector(".msg-reply-btn").addEventListener("click", () => setReplyPreview(d.id, m.text, m.authorName));
+      div.querySelector(".msg-pin-btn").addEventListener("click", () => togglePin(d.id, m.text, m.authorName));
+      div.querySelector(".msg-del-me-btn").addEventListener("click", () => deleteForMe(d.id));
       if (isMine) {
         div.querySelector(".msg-edit-btn").addEventListener("click", () => startEditMessage(d.id, m.text));
+        div.querySelector(".msg-del-everyone-btn").addEventListener("click", () => deleteForEveryone(d.id));
       }
       container.appendChild(div);
     });
+    applyMessageSearchFilter();
     container.scrollTop = container.scrollHeight;
   });
   unsubscribers.push(unsub);
@@ -1420,6 +1679,7 @@ function startEditMessage(msgId, currentText) {
 
 let mentionQuery = null;
 $("chatInput").addEventListener("input", (e) => {
+  signalTyping();
   const val = e.target.value;
   const caret = e.target.selectionStart;
   const upToCaret = val.slice(0, caret);
@@ -1466,15 +1726,25 @@ $("chatInput").addEventListener("keydown", async (e) => {
   }
 });
 
+$("sendMsgBtn").addEventListener("click", async () => {
+  await sendMessage();
+});
+
 async function sendMessage() {
   const text = $("chatInput").value.trim();
   if (!text) return;
   $("chatInput").value = "";
   $("mentionDropdown").classList.add("hidden");
 
-  await msgCol().add({
-    text, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs()
-  });
+  const data = { text, authorUid: currentUser.uid, authorName: currentUserDoc.name, createdAt: nowTs() };
+  if (replyingTo) {
+    data.replyToId = replyingTo.id;
+    data.replyToText = replyingTo.text;
+    data.replyToAuthor = replyingTo.author;
+    clearReplyPreview();
+  }
+  await msgCol().add(data);
+  typingCol().doc(currentUser.uid).delete().catch(() => {});
 
   // Detect @mentions and notify
   Object.entries(membersCache).forEach(([uid, m]) => {
