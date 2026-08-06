@@ -174,10 +174,9 @@
       <div class="filter-row" id="statusFilterRow">
         <button class="chip active" data-status="all">All</button>
         <button class="chip" data-status="To Do">To Do</button>
-        <button class="chip" data-status="In Progress">In Progress</button>
-        <button class="chip" data-status="Pending Handover">Pending Handover</button>
-        <button class="chip" data-status="At Risk">At Risk</button>
-        <button class="chip" data-status="Done">Done</button>
+        <button class="chip" data-status="Completed">Completed</button>
+        <button class="chip" data-status="Partially Completed">Partially Completed</button>
+        <button class="chip" data-status="Handed Over">Handed Over</button>
       </div>
       <div class="task-grid" id="allTaskList"></div>
     </div>
@@ -614,39 +613,34 @@
       </div>
       <div class="field-row">
         <div class="field">
-          <label>Shift</label>
-          <select id="taskShiftInput">
-            <option value="A">Shift A</option>
-            <option value="B">Shift B</option>
-            <option value="C">Shift C</option>
-          </select>
-        </div>
-        <div class="field">
           <label>Assign to</label>
           <select id="taskAssigneeInput"></select>
         </div>
-      </div>
-      <div class="field-row">
         <div class="field">
           <label>Deadline</label>
           <input type="datetime-local" id="taskDeadlineInput">
         </div>
-        <div class="field">
-          <label>Status</label>
-          <select id="taskStatusInput">
-            <option>To Do</option>
-            <option>In Progress</option>
-            <option>Pending Handover</option>
-            <option>At Risk</option>
-            <option>Done</option>
-          </select>
+      </div>
+      <div class="field hidden" id="statusActionsSection">
+        <label>Update status <span class="status-pill" id="modalStatusPill" style="margin-left:6px;"></span></label>
+        <div class="status-action-row">
+          <button class="btn-secondary" id="markCompletedBtn" type="button">Mark Completed</button>
+          <button class="btn-secondary" id="markPartialBtn" type="button">Mark Partially Completed</button>
         </div>
+        <div class="field-row" style="margin-top:8px;align-items:flex-end;">
+          <div class="field" style="flex:1;">
+            <label>Handover to</label>
+            <select id="handoverToInput"></select>
+          </div>
+          <button class="btn-secondary" id="handoverBtn" type="button">Handover</button>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Only the person this task is assigned to can update its status.</p>
       </div>
       <div class="field hidden" id="commentsSection">
-        <label>Review comments</label>
+        <label>Activity log</label>
         <div class="comment-list" id="commentList"></div>
         <div class="field-row" style="margin-top:8px;">
-          <input type="text" id="newCommentInput" placeholder="Add a comment...">
+          <input type="text" id="newCommentInput" placeholder="Add a note...">
           <button class="btn-secondary" id="addCommentBtn">Post</button>
         </div>
       </div>
