@@ -337,6 +337,41 @@ a { color: inherit; }
 .mention-tag { background: var(--brand-soft); color: var(--brand); padding: 1px 4px; border-radius: 4px; font-weight: 600; }
 .chat-input-row { padding: 16px 24px; border-top: 1px solid var(--border); position: relative; }
 .chat-input-row textarea { width: 100%; resize: none; min-height: 44px; max-height: 120px; }
+.chat-input-inner { display: flex; align-items: flex-end; gap: 8px; }
+.chat-input-inner textarea { flex: 1; }
+.send-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.send-btn:hover { background: var(--brand-hover); }
+.send-btn svg { width: 18px; height: 18px; }
+
+.channel-list-header { display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
+.mini-icon-btn { width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
+.mini-icon-btn:hover { background: var(--surface-hover); color: var(--text); }
+.dm-picker { display: flex; gap: 6px; padding: 8px 10px; align-items: center; }
+.dm-picker select { flex: 1; font-size: 12px; }
+.dm-picker button { font-size: 12px; padding: 5px 10px; }
+
+.chat-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 14px; }
+.chat-search-row { display: flex; gap: 8px; padding: 10px 24px; border-bottom: 1px solid var(--border); align-items: center; }
+.chat-search-row input { flex: 1; }
+.chat-pinned-bar { display: flex; align-items: center; gap: 8px; padding: 8px 24px; background: var(--brand-soft); font-size: 12px; border-bottom: 1px solid var(--border); }
+.chat-pinned-bar .pin-body { flex: 1; }
+.chat-pinned-bar button { color: var(--brand); font-weight: 700; }
+.typing-indicator { padding: 2px 24px; font-size: 12px; color: var(--text-muted); font-style: italic; min-height: 18px; }
+.reply-preview-bar { display: flex; align-items: center; gap: 8px; padding: 8px 24px; background: var(--surface-hover); font-size: 12px; border-top: 1px solid var(--border); }
+.reply-preview-bar .reply-body { flex: 1; border-left: 3px solid var(--brand); padding-left: 8px; }
+.reply-preview-bar button { color: var(--danger); font-weight: 700; }
+
+.msg-quote { border-left: 3px solid var(--brand); padding-left: 8px; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.msg-actions-row { display: flex; gap: 10px; margin-top: 4px; }
+.msg-actions-row button { font-size: 11px; color: var(--text-muted); opacity: 0.75; }
+.msg-actions-row button:hover { opacity: 1; color: var(--brand); }
+.msg-reactions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.reaction-pill { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); cursor: pointer; }
+.reaction-pill.mine { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.emoji-picker-row { display: flex; gap: 6px; margin-top: 4px; }
+.emoji-picker-row button { font-size: 16px; padding: 2px 4px; border-radius: 6px; }
+.emoji-picker-row button:hover { background: var(--surface-hover); }
+.msg-deleted { font-size: 13px; color: var(--text-muted); font-style: italic; }
 .pinned-banner { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .pinned-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface-hover); border-left: 3px solid var(--brand); border-radius: 8px; font-size: 13px; }
 .pinned-item .pin-title { font-weight: 700; flex: 1; }
