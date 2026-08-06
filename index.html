@@ -187,13 +187,42 @@
       <div class="pinned-banner hidden" id="pinnedBannerChat" style="margin:16px 24px 0;"></div>
       <div class="chat-layout">
         <div class="channel-list" id="channelList">
-          <h4>Channels</h4>
+          <div class="channel-list-header">
+            <h4>Channels</h4>
+            <button class="mini-icon-btn" id="newChannelBtn" title="New channel">+</button>
+          </div>
+          <div id="channelItemsContainer"></div>
+          <div class="channel-list-header" style="margin-top:16px;">
+            <h4>Direct Messages</h4>
+            <button class="mini-icon-btn" id="newDmBtn" title="New direct message">+</button>
+          </div>
+          <div id="dmItemsContainer"></div>
+          <div class="dm-picker hidden" id="dmPickerPanel">
+            <select id="dmMemberSelect"></select>
+            <button class="btn-secondary" id="startDmBtn" type="button">Start</button>
+          </div>
         </div>
         <div class="chat-main">
+          <div class="chat-toolbar">
+            <span id="chatConvTitle">#general</span>
+            <button class="mini-icon-btn" id="chatSearchToggleBtn" title="Search this chat">🔍</button>
+          </div>
+          <div class="chat-search-row hidden" id="chatSearchRow">
+            <input type="text" id="chatSearchInput" placeholder="Search messages in this chat...">
+            <button class="mini-icon-btn" id="chatSearchCloseBtn">✕</button>
+          </div>
+          <div class="chat-pinned-bar hidden" id="chatPinnedBar"></div>
           <div class="chat-messages" id="chatMessages"></div>
+          <div class="typing-indicator hidden" id="typingIndicator"></div>
+          <div class="reply-preview-bar hidden" id="replyPreviewBar"></div>
           <div class="chat-input-row">
             <div class="mention-dropdown hidden" id="mentionDropdown"></div>
-            <textarea id="chatInput" placeholder="Message #general — use @ to mention someone"></textarea>
+            <div class="chat-input-inner">
+              <textarea id="chatInput" placeholder="Message #general — use @ to mention someone"></textarea>
+              <button class="send-btn" id="sendMsgBtn" type="button" title="Send">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
