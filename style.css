@@ -251,8 +251,6 @@ a { color: inherit; }
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
 .task-card:hover { border-color: var(--brand); transform: translateY(-1px); }
-.task-card.shift-B { border-left-color: var(--shift-b); }
-.task-card.shift-C { border-left-color: var(--shift-c); }
 .task-card.overdue { border-left-color: var(--danger); }
 
 .task-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -268,8 +266,14 @@ a { color: inherit; }
 .status-todo { background: var(--surface-2); color: var(--text-muted); }
 .status-progress { background: var(--brand-soft); color: var(--brand); }
 .status-handover { background: var(--warning-soft); color: var(--warning); }
+.status-partial { background: var(--warning-soft); color: var(--warning); }
 .status-risk { background: var(--danger-soft); color: var(--danger); }
 .status-done { background: var(--success-soft); color: var(--success); }
+.status-action-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.status-action-row button { font-size: 12px; }
+.log-date-header { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 4px; }
+.log-date-header:first-child { margin-top: 0; }
+.log-entry { font-size: 12px; color: var(--text-muted); font-style: italic; padding: 4px 0; }
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.5; }
